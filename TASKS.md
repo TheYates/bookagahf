@@ -51,6 +51,15 @@
 - [x] Client profile page (read-only)
 - [x] Seed routes — admin, clients, doctors + specialties
 
+## Realtime
+- [x] useRealtimeTable hook (lib/hooks/use-realtime-table.ts)
+- [x] Client appointments page — realtime refresh
+- [x] Client notifications page — realtime refresh
+- [x] Doctor notifications page — realtime refresh
+- [x] Admin dashboard — realtime stats refresh
+- [x] Admin appointments list — realtime refresh
+- [x] Doctor appointments page — realtime refresh + toast notifications
+
 ## Remaining
 - [x] Wire app_metadata.role for all users via /api/seed/fix-roles backfill
 - [x] Remove middleware DB fallback (proxy.ts now relies solely on app_metadata)

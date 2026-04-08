@@ -20,7 +20,8 @@ export async function PATCH(request: Request) {
   const { data, error } = await supabase
     .from("settings")
     .update({
-      booking_buffer_hours: body.booking_buffer_hours,
+      ...(body.booking_buffer_hours !== undefined && { booking_buffer_hours: body.booking_buffer_hours }),
+      ...(body.reschedule_style !== undefined && { reschedule_style: body.reschedule_style }),
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1)

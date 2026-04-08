@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
 
 type Notification = {
   id: string
@@ -38,19 +39,12 @@ export default function DoctorNotificationsPage() {
 
   React.useEffect(() => {
     void fetchNotifications()
-
-    // Realtime subscription for new notifications
-    const channel = supabaseBrowserClient
-      .channel("doctor-notifications")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        () => { void fetchNotifications() },
-      )
-      .subscribe()
-
-    return () => { void supabaseBrowserClient.removeChannel(channel) }
   }, [])
+
+  useRealtimeTable({
+    table: "notifications",
+    onchange: () => void fetchNotifications(),
+  })
 
   const markAllRead = async () => {
     const { data: { user } } = await supabaseBrowserClient.auth.getUser()

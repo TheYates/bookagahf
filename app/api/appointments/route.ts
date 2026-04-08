@@ -11,12 +11,28 @@ const adminClient = createClient(
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase
+
+  // Get current user + role
+  const { data: { user } } = await supabase.auth.getUser()
+  const role = user?.app_metadata?.role as string | undefined
+
+  // Admins see all appointments; clients/doctors see only their own
+  let query = adminClient
     .from("appointments")
     .select("*, specialties(name), profiles!appointments_doctor_id_fkey(full_name)")
     .order("scheduled_at", { ascending: true })
 
+  if (role !== "admin") {
+    if (!user) {
+      return NextResponse.json({ appointments: [] })
+    }
+    query = query.or(`created_by.eq.${user.id},doctor_id.eq.${user.id}`)
+  }
+
+  const { data, error } = await query
+
   if (error) {
+    console.error("[appointments GET] error:", error.message)
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
@@ -27,8 +43,8 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient()
   const body = await request.json()
 
-  // Booking buffer check
-  const { data: settings } = await supabase
+  // Booking buffer check — use admin client to bypass RLS on settings table
+  const { data: settings } = await adminClient
     .from("settings")
     .select("booking_buffer_hours")
     .single()
@@ -46,13 +62,17 @@ export async function POST(request: Request) {
     }
   }
 
+  // Get the current user to set created_by (required for RLS)
+  const { data: { user } } = await supabase.auth.getUser()
+
   const { data, error } = await supabase
     .from("appointments")
-    .insert({ ...body, status: "scheduled" })
+    .insert({ ...body, status: "scheduled", created_by: user?.id ?? body.created_by })
     .select()
     .single()
 
   if (error) {
+    console.error("[appointments POST] insert error:", error.message, error.details, error.hint)
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 

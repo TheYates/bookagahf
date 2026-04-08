@@ -357,13 +357,13 @@ export default function BookAppointmentPage() {
                   {filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? "s" : ""} available
                 </p>
                 {dataLoading ? (
-                  <div className="flex flex-col gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
                   </div>
                 ) : filteredDoctors.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No doctors found matching your search.</p>
                 ) : (
-                  <div className="flex flex-col gap-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     {filteredDoctors.map((doc) => {
                       const docSpecialties = specialties.filter((s) =>
                         doc.doctor_specialties?.some((ds) => ds.specialty_id === s.id),

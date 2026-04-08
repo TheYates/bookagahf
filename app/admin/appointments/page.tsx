@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { CalendarDays, Search, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
 
 type Appointment = {
   id: string
@@ -35,12 +36,19 @@ export default function AdminAppointmentsPage() {
   const [filter, setFilter] = React.useState("all")
   const [search, setSearch] = React.useState("")
 
-  React.useEffect(() => {
+  const fetchAppointments = React.useCallback(() => {
     void fetch("/api/appointments")
       .then((r) => r.json())
       .then((d) => setAppointments(d.appointments ?? []))
       .finally(() => setLoading(false))
   }, [])
+
+  React.useEffect(() => { fetchAppointments() }, [fetchAppointments])
+
+  useRealtimeTable({
+    table: "appointments",
+    onchange: fetchAppointments,
+  })
 
   const filtered = appointments.filter((a) => {
     const matchStatus = filter === "all" || a.status === filter

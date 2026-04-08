@@ -107,12 +107,13 @@ create table if not exists public.notifications (
 create table if not exists public.settings (
   id int primary key default 1,
   booking_buffer_hours int not null default 2,
+  reschedule_style text not null default 'dialog', -- 'dialog' or 'inline'
   updated_at timestamptz not null default now(),
   updated_by uuid references public.profiles(id) on delete set null
 );
 
-insert into public.settings (id, booking_buffer_hours)
-  values (1, 2)
+insert into public.settings (id, booking_buffer_hours, reschedule_style)
+  values (1, 2, 'dialog')
   on conflict (id) do nothing;
 
 create table if not exists public.otp_tokens (

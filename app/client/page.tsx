@@ -24,6 +24,8 @@ type Appointment = {
   scheduled_at: string
   notes: string | null
   dependent_name: string | null
+  specialties: { name: string } | null
+  profiles: { full_name: string } | null
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -49,10 +51,17 @@ export default function ClientDashboardPage() {
   React.useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabaseBrowserClient.auth.getUser()
-      if (user?.user_metadata?.first_name) {
-        setUserName(user.user_metadata.first_name)
-      } else {
-        setUserName("there")
+      if (user) {
+        // Fetch full name from profiles table (more reliable than user_metadata)
+        const { data: profile } = await supabaseBrowserClient
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single()
+
+        const fullName = profile?.full_name ?? user.user_metadata?.full_name ?? ""
+        const firstName = fullName.split(" ")[0] || "there"
+        setUserName(firstName)
       }
 
       fetch("/api/appointments")
@@ -121,13 +130,13 @@ export default function ClientDashboardPage() {
             <Link href="/client/appointments" className="group">
               <motion.div
                 whileHover={{ y: -4 }}
-                className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background to-muted/50 p-6 shadow-sm transition-shadow group-hover:shadow-md"
+                className="relative overflow-hidden rounded-2xl border p-6 shadow-sm transition-shadow group-hover:shadow-md"
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="flex items-center text-sm font-medium text-muted-foreground">
                       <Clock className="mr-2 h-4 w-4 text-emerald-500" />
-                      Total History
+                      Total Appointments
                     </p>
                     <p className="mt-2 text-4xl font-bold text-foreground">{appointments.length}</p>
                   </div>
@@ -155,9 +164,14 @@ export default function ClientDashboardPage() {
                     <p className="text-3xl font-bold mb-2">
                       {new Date(nextAppointment.scheduled_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
                     </p>
-                    <p className="text-foreground font-medium">{nextAppointment.patient_name}</p>
+                    {nextAppointment.profiles?.full_name && (
+                      <p className="font-semibold text-foreground">{nextAppointment.profiles.full_name}</p>
+                    )}
+                    {nextAppointment.specialties?.name && (
+                      <p className="text-sm text-muted-foreground">{nextAppointment.specialties.name}</p>
+                    )}
                     {nextAppointment.dependent_name && (
-                      <p className="text-sm text-muted-foreground mt-0.5">For: {nextAppointment.dependent_name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">For: {nextAppointment.dependent_name}</p>
                     )}
                   </div>
                   <div className="flex flex-col gap-3 min-w-[140px] items-start sm:items-end border-t sm:border-t-0 pt-4 sm:pt-0">

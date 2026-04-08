@@ -4,6 +4,7 @@ import * as React from "react"
 import { Bell, CheckCheck, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
+import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
 
 type Notification = {
   id: string
@@ -31,6 +32,11 @@ export default function NotificationsPage() {
     setNotifications(data ?? [])
     setLoading(false)
   }
+
+  useRealtimeTable({
+    table: "notifications",
+    onchange: () => void fetchNotifications(),
+  })
 
   React.useEffect(() => {
     void fetchNotifications()

@@ -100,7 +100,15 @@ function DateTimePicker({
         </div>
 
         {/* Time slots panel on right (absolute on md+) */}
-        <div className="no-scrollbar inset-y-0 right-0 flex max-h-72 w-full scroll-pb-6 flex-col gap-4 overflow-y-auto border-t p-6 md:absolute md:max-h-none md:w-48 md:border-t-0 md:border-l">
+        <div className="no-scrollbar inset-y-0 right-0 flex max-h-72 w-full scroll-pb-6 flex-col gap-3 overflow-y-auto border-t p-6 md:absolute md:max-h-none md:w-48 md:border-t-0 md:border-l">
+          {/* Section header */}
+          <div className="shrink-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {date
+                ? `Available for ${new Date(date + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}`
+                : "Select a date"}
+            </p>
+          </div>
           {slotsLoading ? (
             // Show 6 skeleton items while loading
             <>

@@ -11,6 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
 
 type Stats = {
   total: number
@@ -87,15 +88,25 @@ export default function AdminDashboard() {
   const [recentAppointments, setRecentAppointments] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
 
-  React.useEffect(() => {
+  const refreshStats = React.useCallback(() => {
     void fetch("/api/admin/stats")
       .then((r) => r.json())
       .then((data) => {
         if (data.stats) setStats(data.stats)
         if (data.recentAppointments) setRecentAppointments(data.recentAppointments)
       })
-      .finally(() => setLoading(false))
   }, [])
+
+  React.useEffect(() => {
+    refreshStats()
+    setLoading(false)
+  }, [refreshStats])
+
+  // Realtime: refresh stats when appointments change
+  useRealtimeTable({
+    table: "appointments",
+    onchange: refreshStats,
+  })
 
   const cards = STAT_CARDS(stats)
 
