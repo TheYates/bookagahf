@@ -1,36 +1,68 @@
 import { NextResponse } from "next/server"
 
-import { createSupabaseServerClient } from "@/lib/supabase/server"
-
 export async function GET() {
-  const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase.from("settings").select("*").single()
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/settings?id=eq.1`,
+      {
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      }
+    )
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    const data = await response.json()
+
+    if (!response.ok) {
+      return NextResponse.json({ error: data.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ settings: data[0] })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  return NextResponse.json({ settings: data })
 }
 
 export async function PATCH(request: Request) {
-  const supabase = await createSupabaseServerClient()
   const body = await request.json()
 
-  const { data, error } = await supabase
-    .from("settings")
-    .update({
-      ...(body.booking_buffer_hours !== undefined && { booking_buffer_hours: body.booking_buffer_hours }),
-      ...(body.reschedule_style !== undefined && { reschedule_style: body.reschedule_style }),
+  try {
+    // Build update object - only include fields that are in the request
+    const updateData: Record<string, any> = {
       updated_at: new Date().toISOString(),
-    })
-    .eq("id", 1)
-    .select()
-    .single()
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    if (body.appointment_duration !== undefined) {
+      updateData.appointment_duration = body.appointment_duration
+    }
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/settings?id=eq.1`,
+      {
+        method: "PATCH",
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(updateData),
+      }
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      console.error("Settings update error:", data)
+      return NextResponse.json({ 
+        error: data.message || "Could not update settings." 
+      }, { status: 400 })
+    }
+
+    return NextResponse.json({ settings: data[0] || data })
+  } catch (err: any) {
+    console.error("Settings update exception:", err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  return NextResponse.json({ settings: data })
 }

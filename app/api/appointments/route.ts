@@ -9,18 +9,27 @@ const adminClient = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } },
 )
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const startDate = searchParams.get("startDate")
+  const endDate = searchParams.get("endDate")
+
   const supabase = await createSupabaseServerClient()
 
-  // Get current user + role
   const { data: { user } } = await supabase.auth.getUser()
   const role = user?.app_metadata?.role as string | undefined
 
-  // Admins see all appointments; clients/doctors see only their own
   let query = adminClient
     .from("appointments")
     .select("*, specialties(name), profiles!appointments_doctor_id_fkey(full_name)")
     .order("scheduled_at", { ascending: true })
+
+  if (startDate) {
+    query = query.gte("scheduled_at", startDate)
+  }
+  if (endDate) {
+    query = query.lte("scheduled_at", endDate + "T23:59:59")
+  }
 
   if (role !== "admin") {
     if (!user) {

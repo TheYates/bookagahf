@@ -7,6 +7,7 @@ import Image from "next/image"
 import {
   LayoutDashboard,
   CalendarDays,
+  Calendar,
   Users,
   Stethoscope,
   Settings,
@@ -20,6 +21,7 @@ import { supabaseBrowserClient } from "@/lib/supabase/client"
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/appointments", label: "Appointments", icon: CalendarDays },
+  { href: "/admin/calendar", label: "Calendar", icon: Calendar },
   { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },

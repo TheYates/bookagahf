@@ -40,13 +40,15 @@ export async function GET(
     return NextResponse.json({ slots: [] })
   }
 
-  // Get booking buffer from settings
+  // Get booking buffer and appointment duration from settings
   const { data: settings } = await adminClient
     .from("settings")
-    .select("booking_buffer_hours")
+    .select("booking_buffer_hours, appointment_duration")
     .single()
 
   const bufferHours = settings?.booking_buffer_hours ?? 2
+  const appointmentDuration = settings?.appointment_duration ?? 30
+  const durationMs = appointmentDuration * 60 * 1000
   const now = new Date()
   const bufferMs = bufferHours * 60 * 60 * 1000
 
@@ -69,7 +71,7 @@ export async function GET(
     }),
   )
 
-  // Generate 30-min slots within availability windows
+  // Generate slots within availability windows using configured duration
   const slots: string[] = []
   for (const window of avail) {
     const [startH, startM] = window.start_time.split(":").map(Number)
@@ -93,7 +95,7 @@ export async function GET(
         slots.push(slotLabel)
       }
 
-      cursor = new Date(cursor.getTime() + 30 * 60 * 1000)
+      cursor = new Date(cursor.getTime() + durationMs)
     }
   }
 

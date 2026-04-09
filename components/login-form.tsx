@@ -102,7 +102,12 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
     const [identifierError, setIdentifierError] = React.useState<string | null>(null)
+    const identifierRef = React.useRef<HTMLInputElement>(null)
     const credentialRef = React.useRef<HTMLInputElement>(null)
+
+    React.useEffect(() => {
+      identifierRef.current?.focus()
+    }, [])
 
     const inputType = detectInputType(identifier)
     // Only treat as staff if it doesn't start with X or digits (rules out partial x-number/corporate)
@@ -252,6 +257,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                     <User className="h-4 w-4 text-foreground" />
                   </div>
                   <input
+                    ref={identifierRef}
                     type="text"
                     placeholder="X-number, Corporate Number or username"
                     value={identifier}

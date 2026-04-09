@@ -4,11 +4,12 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Save } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 export default function AdminSettingsPage() {
   const [bufferHours, setBufferHours] = React.useState("2")
+  const [appointmentDuration, setAppointmentDuration] = React.useState("30")
   const [rescheduleStyle, setRescheduleStyle] = React.useState<"dialog" | "inline">("dialog")
-  const [message, setMessage] = React.useState<{ text: string; ok: boolean } | null>(null)
   const [loading, setLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -16,27 +17,32 @@ export default function AdminSettingsPage() {
       .then((r) => r.json())
       .then((data) => {
         setBufferHours(String(data.settings?.booking_buffer_hours ?? 2))
+        setAppointmentDuration(String(data.settings?.appointment_duration ?? 30))
         setRescheduleStyle(data.settings?.reschedule_style ?? "dialog")
       })
   }, [])
 
   const save = async () => {
     setLoading(true)
-    setMessage(null)
     const res = await fetch("/api/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        booking_buffer_hours: Number(bufferHours),
-        reschedule_style: rescheduleStyle,
+        appointment_duration: Number(appointmentDuration),
       }),
     })
     setLoading(false)
-    setMessage(
-      res.ok
-        ? { text: "Settings saved.", ok: true }
-        : { text: "Failed to save settings.", ok: false },
-    )
+    
+    if (res.ok) {
+      toast.success("Settings saved", {
+        description: "Appointment duration has been updated.",
+      })
+    } else {
+      const data = await res.json()
+      toast.error("Failed to save settings", {
+        description: data.error || "Something went wrong.",
+      })
+    }
   }
 
   return (
@@ -62,6 +68,26 @@ export default function AdminSettingsPage() {
             className="w-28 rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <span className="text-sm text-muted-foreground">hours</span>
+        </div>
+      </div>
+
+      {/* Appointment duration */}
+      <div className="rounded-xl border bg-background p-6 shadow-sm">
+        <h2 className="font-semibold">Appointment Duration</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Length of each appointment in minutes. This determines how many slots are available.
+        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <select
+            value={appointmentDuration}
+            onChange={(e) => setAppointmentDuration(e.target.value)}
+            className="w-40 rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="45">45 minutes</option>
+            <option value="60">60 minutes</option>
+          </select>
         </div>
       </div>
 
@@ -100,11 +126,6 @@ export default function AdminSettingsPage() {
           <Save className="h-4 w-4" />
           {loading ? "Saving…" : "Save settings"}
         </Button>
-        {message && (
-          <p className={`text-sm ${message.ok ? "text-green-600" : "text-destructive"}`}>
-            {message.text}
-          </p>
-        )}
       </div>
     </div>
   )

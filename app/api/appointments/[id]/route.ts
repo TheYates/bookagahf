@@ -70,3 +70,21 @@ export async function PATCH(
 
   return NextResponse.json({ appointment: data })
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+
+  const { error } = await adminClient
+    .from("appointments")
+    .delete()
+    .eq("id", id)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
+  return NextResponse.json({ success: true })
+}
