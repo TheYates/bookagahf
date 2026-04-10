@@ -2,7 +2,13 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { Calendar as CalendarIcon, Clock, User, Stethoscope, X } from "lucide-react"
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  User,
+  Stethoscope,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,7 +43,7 @@ interface BookingModalProps {
   selectedDate: Date | null
   selectedTime: string | null
   userRole: "client" | "receptionist" | "admin" | "reviewer"
-  currentUserId?: number
+  currentUserId?: string
   onAppointmentBooked?: () => void
 }
 
@@ -149,11 +155,11 @@ export function BookingModal({
           <DialogTitle>Book Appointment</DialogTitle>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
           <CalendarIcon className="h-4 w-4" />
           <span>{dateStr}</span>
           {selectedTime && (
-            <span className="text-primary font-medium">• {selectedTime}</span>
+            <span className="font-medium text-primary">• {selectedTime}</span>
           )}
         </div>
 
@@ -163,7 +169,9 @@ export function BookingModal({
             <Input
               id="clientName"
               value={formData.clientName}
-              onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, clientName: e.target.value })
+              }
               placeholder="Enter patient name"
               required
             />
@@ -175,7 +183,9 @@ export function BookingModal({
               <Input
                 id="clientXNumber"
                 value={formData.clientXNumber}
-                onChange={(e) => setFormData({ ...formData, clientXNumber: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, clientXNumber: e.target.value })
+                }
                 placeholder="X12345/26"
               />
             </div>
@@ -186,7 +196,9 @@ export function BookingModal({
                 id="contactPhone"
                 type="tel"
                 value={formData.contactPhone}
-                onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, contactPhone: e.target.value })
+                }
                 placeholder="+233 XX XXX XXXX"
               />
             </div>
@@ -196,7 +208,9 @@ export function BookingModal({
             <Label htmlFor="department">Department *</Label>
             <Select
               value={formData.departmentId}
-              onValueChange={(value) => setFormData({ ...formData, departmentId: value })}
+              onValueChange={(value) =>
+                setFormData({ ...formData, departmentId: value })
+              }
             >
               <SelectTrigger id="department">
                 <SelectValue placeholder="Select department" />
@@ -216,7 +230,9 @@ export function BookingModal({
             <Input
               id="notes"
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
               placeholder="Optional notes"
             />
           </div>

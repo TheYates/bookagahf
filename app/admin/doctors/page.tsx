@@ -1,9 +1,24 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Search, Stethoscope, X, Pencil } from "lucide-react"
+import {
+  Plus,
+  Search,
+  Stethoscope,
+  X,
+  Pencil,
+  Calendar,
+  ChevronDown,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
@@ -14,10 +29,28 @@ type Doctor = {
   phone: string | null
   is_active: boolean
   doctor_settings: { is_available: boolean }[] | null
-  doctor_specialties: { specialties: { name: string } | null; specialty_id: string }[] | null
+  doctor_specialties:
+    | { specialties: { name: string } | null; specialty_id: string }[]
+    | null
 }
 
 type Specialty = { id: string; name: string; description: string | null }
+
+type ScheduleSlot = {
+  day_of_week: number
+  start_time: string
+  end_time: string
+}
+
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+]
 
 export default function AdminDoctorsPage() {
   const [doctors, setDoctors] = React.useState<Doctor[]>([])
@@ -35,7 +68,9 @@ export default function AdminDoctorsPage() {
   const [username, setUsername] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [phone, setPhone] = React.useState("")
-  const [selectedSpecialties, setSelectedSpecialties] = React.useState<string[]>([])
+  const [selectedSpecialties, setSelectedSpecialties] = React.useState<
+    string[]
+  >([])
 
   // New specialty form
   const [specName, setSpecName] = React.useState("")
@@ -49,6 +84,14 @@ export default function AdminDoctorsPage() {
   const [editSpecialties, setEditSpecialties] = React.useState<string[]>([])
   const [editError, setEditError] = React.useState<string | null>(null)
 
+  // Schedule modal state
+  const [scheduleDoctor, setScheduleDoctor] = React.useState<Doctor | null>(
+    null
+  )
+  const [schedule, setSchedule] = React.useState<ScheduleSlot[]>([])
+  const [scheduleLoading, setScheduleLoading] = React.useState(false)
+  const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
+
   const fetchAll = () => {
     setLoading(true)
     Promise.all([
@@ -61,7 +104,18 @@ export default function AdminDoctorsPage() {
     })
   }
 
-  React.useEffect(() => { fetchAll() }, [])
+  React.useEffect(() => {
+    fetchAll()
+  }, [])
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = () => setOpenDropdown(null)
+    if (openDropdown) {
+      document.addEventListener("click", handleClickOutside)
+      return () => document.removeEventListener("click", handleClickOutside)
+    }
+  }, [openDropdown])
 
   const createDoctor = async () => {
     if (!fullName || !username || !password) {
@@ -88,12 +142,19 @@ export default function AdminDoctorsPage() {
       return
     }
     setShowForm(false)
-    setFullName(""); setUsername(""); setPassword(""); setPhone(""); setSelectedSpecialties([])
+    setFullName("")
+    setUsername("")
+    setPassword("")
+    setPhone("")
+    setSelectedSpecialties([])
     fetchAll()
   }
 
   const createSpecialty = async () => {
-    if (!specName) { setSpecError("Specialty name is required."); return }
+    if (!specName) {
+      setSpecError("Specialty name is required.")
+      return
+    }
     setSaving(true)
     setSpecError(null)
     const res = await fetch("/api/admin/specialties", {
@@ -102,9 +163,14 @@ export default function AdminDoctorsPage() {
       body: JSON.stringify({ name: specName, description: specDesc || null }),
     })
     setSaving(false)
-    if (!res.ok) { const d = await res.json(); setSpecError(d.error ?? "Failed to create specialty"); return }
+    if (!res.ok) {
+      const d = await res.json()
+      setSpecError(d.error ?? "Failed to create specialty")
+      return
+    }
     setShowSpecialtyForm(false)
-    setSpecName(""); setSpecDesc("")
+    setSpecName("")
+    setSpecDesc("")
     fetchAll()
   }
 
@@ -120,11 +186,13 @@ export default function AdminDoctorsPage() {
 
   const closeSpecialtyDialog = () => {
     setShowSpecialtyForm(false)
-    setSpecName(""); setSpecDesc(""); setSpecError(null)
+    setSpecName("")
+    setSpecDesc("")
+    setSpecError(null)
   }
 
-  const filtered = doctors.filter((d) =>
-    !search || d.full_name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = doctors.filter(
+    (d) => !search || d.full_name.toLowerCase().includes(search.toLowerCase())
   )
 
   const handleCloseDialog = () => {
@@ -137,8 +205,28 @@ export default function AdminDoctorsPage() {
     setEditName(doctor.full_name)
     setEditPhone(doctor.phone ?? "")
     setEditActive(doctor.is_active)
-    setEditSpecialties(doctor.doctor_specialties?.map((ds) => ds.specialty_id) ?? [])
+    setEditSpecialties(
+      doctor.doctor_specialties?.map((ds) => ds.specialty_id) ?? []
+    )
     setEditError(null)
+  }
+
+  const openSchedule = async (doctor: Doctor) => {
+    setScheduleDoctor(doctor)
+    setScheduleLoading(true)
+    try {
+      const res = await fetch(`/api/doctors/${doctor.id}/availability`)
+      const data = await res.json()
+      setSchedule(data.schedule ?? [])
+    } catch {
+      setSchedule([])
+    }
+    setScheduleLoading(false)
+  }
+
+  const closeSchedule = () => {
+    setScheduleDoctor(null)
+    setSchedule([])
   }
 
   const closeEdit = () => {
@@ -175,10 +263,17 @@ export default function AdminDoctorsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Doctors</h1>
-          <p className="text-sm text-muted-foreground">Manage doctors and their specialties.</p>
+          <p className="text-sm text-muted-foreground">
+            Manage doctors and their specialties.
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowSpecialtyForm(true)} className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSpecialtyForm(true)}
+            className="gap-2"
+          >
             <Plus className="h-4 w-4" /> Add specialty
           </Button>
           <Button size="sm" onClick={() => setShowForm(true)} className="gap-2">
@@ -194,28 +289,55 @@ export default function AdminDoctorsPage() {
       )}
 
       {/* Specialty Dialog */}
-      <Dialog open={showSpecialtyForm} onOpenChange={(open) => { if (!open) closeSpecialtyDialog() }}>
+      <Dialog
+        open={showSpecialtyForm}
+        onOpenChange={(open) => {
+          if (!open) closeSpecialtyDialog()
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Manage specialties</DialogTitle>
-            <DialogDescription>Add new specialties or remove existing ones.</DialogDescription>
+            <DialogDescription>
+              Add new specialties or remove existing ones.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-3 py-2">
-            <Field label="Specialty name *" value={specName} onChange={setSpecName} placeholder="e.g. Cardiology" />
-            <Field label="Description (optional)" value={specDesc} onChange={setSpecDesc} placeholder="Brief description of this specialty" />
-            {specError && <p className="text-xs text-destructive">{specError}</p>}
+            <Field
+              label="Specialty name *"
+              value={specName}
+              onChange={setSpecName}
+              placeholder="e.g. Cardiology"
+            />
+            <Field
+              label="Description (optional)"
+              value={specDesc}
+              onChange={setSpecDesc}
+              placeholder="Brief description of this specialty"
+            />
+            {specError && (
+              <p className="text-xs text-destructive">{specError}</p>
+            )}
           </div>
 
           {/* Existing specialties list */}
           {specialties.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Existing specialties</p>
+              <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Existing specialties
+              </p>
               <div className="flex flex-wrap gap-2">
                 {specialties.map((s) => (
-                  <span key={s.id} className="flex items-center gap-1 rounded-full border bg-muted/30 px-3 py-1 text-xs">
+                  <span
+                    key={s.id}
+                    className="flex items-center gap-1 rounded-full border bg-muted/30 px-3 py-1 text-xs"
+                  >
                     {s.name}
-                    <button onClick={() => deleteSpecialty(s.id)} className="text-muted-foreground hover:text-destructive">
+                    <button
+                      onClick={() => deleteSpecialty(s.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </span>
@@ -225,7 +347,13 @@ export default function AdminDoctorsPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={closeSpecialtyDialog} disabled={saving}>Cancel</Button>
+            <Button
+              variant="outline"
+              onClick={closeSpecialtyDialog}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
             <Button onClick={createSpecialty} disabled={saving}>
               {saving ? "Creating…" : "Create specialty"}
             </Button>
@@ -234,35 +362,60 @@ export default function AdminDoctorsPage() {
       </Dialog>
 
       {/* Edit Doctor Dialog */}
-      <Dialog open={!!editDoctor} onOpenChange={(open) => { if (!open) closeEdit() }}>
+      <Dialog
+        open={!!editDoctor}
+        onOpenChange={(open) => {
+          if (!open) closeEdit()
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit doctor</DialogTitle>
-            <DialogDescription>Update details and specialty assignments for {editDoctor?.full_name}.</DialogDescription>
+            <DialogDescription>
+              Update details and specialty assignments for{" "}
+              {editDoctor?.full_name}.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-3 py-2 sm:grid-cols-2">
-            <Field label="Full name" value={editName} onChange={setEditName} placeholder="Dr. Jane Doe" />
-            <Field label="Phone" value={editPhone} onChange={setEditPhone} placeholder="+233..." type="tel" />
+            <Field
+              label="Full name"
+              value={editName}
+              onChange={setEditName}
+              placeholder="Dr. Jane Doe"
+            />
+            <Field
+              label="Phone"
+              value={editPhone}
+              onChange={setEditPhone}
+              placeholder="+233..."
+              type="tel"
+            />
           </div>
 
           {/* Active toggle */}
           <div className="flex items-center justify-between rounded-lg border px-4 py-3">
             <div>
               <p className="text-sm font-medium">Account active</p>
-              <p className="text-xs text-muted-foreground">Inactive doctors cannot be booked</p>
+              <p className="text-xs text-muted-foreground">
+                Inactive doctors cannot be booked
+              </p>
             </div>
             <button
               onClick={() => setEditActive((v) => !v)}
               className={cn(
                 "relative flex h-7 w-12 items-center rounded-full border-2 transition-colors duration-300",
-                editActive ? "border-green-500 bg-green-500" : "border-muted-foreground bg-muted",
+                editActive
+                  ? "border-green-500 bg-green-500"
+                  : "border-muted-foreground bg-muted"
               )}
             >
-              <span className={cn(
-                "absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-300",
-                editActive ? "translate-x-6" : "translate-x-1",
-              )} />
+              <span
+                className={cn(
+                  "absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-300",
+                  editActive ? "translate-x-6" : "translate-x-1"
+                )}
+              />
             </button>
           </div>
 
@@ -273,14 +426,18 @@ export default function AdminDoctorsPage() {
               {specialties.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => setEditSpecialties((prev) =>
-                    prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
-                  )}
+                  onClick={() =>
+                    setEditSpecialties((prev) =>
+                      prev.includes(s.id)
+                        ? prev.filter((id) => id !== s.id)
+                        : [...prev, s.id]
+                    )
+                  }
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs transition-colors",
                     editSpecialties.includes(s.id)
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:border-primary/40",
+                      : "text-muted-foreground hover:border-primary/40"
                   )}
                 >
                   {s.name}
@@ -292,8 +449,73 @@ export default function AdminDoctorsPage() {
           {editError && <p className="text-xs text-destructive">{editError}</p>}
 
           <DialogFooter>
-            <Button variant="outline" onClick={closeEdit} disabled={saving}>Cancel</Button>
-            <Button onClick={saveEdit} disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+            <Button variant="outline" onClick={closeEdit} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Dialog */}
+      <Dialog
+        open={!!scheduleDoctor}
+        onOpenChange={(open) => {
+          if (!open) closeSchedule()
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Availability Schedule</DialogTitle>
+            <DialogDescription>
+              {scheduleDoctor?.full_name}'s weekly availability
+            </DialogDescription>
+          </DialogHeader>
+
+          {scheduleLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </div>
+          ) : schedule.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-sm text-muted-foreground">
+                No schedule set or doctor is unavailable for booking.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {DAY_NAMES.map((dayName, dayIndex) => {
+                const daySlots = schedule.filter(
+                  (s) => s.day_of_week === dayIndex
+                )
+                if (daySlots.length === 0) return null
+                return (
+                  <div
+                    key={dayIndex}
+                    className="flex items-center justify-between rounded-lg border px-3 py-2"
+                  >
+                    <span className="text-sm font-medium">{dayName}</span>
+                    <div className="text-sm text-muted-foreground">
+                      {daySlots.map((slot, i) => (
+                        <span key={i}>
+                          {formatTime(slot.start_time)} -{" "}
+                          {formatTime(slot.end_time)}
+                          {i < daySlots.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeSchedule}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -303,13 +525,37 @@ export default function AdminDoctorsPage() {
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Add doctor</DialogTitle>
-            <DialogDescription>Create a new doctor account and assign specialties.</DialogDescription>
+            <DialogDescription>
+              Create a new doctor account and assign specialties.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-4 sm:grid-cols-2">
-            <Field label="Full name" value={fullName} onChange={setFullName} placeholder="Dr. Jane Doe" />
-            <Field label="Username (login)" value={username} onChange={setUsername} placeholder="dr.jane" />
-            <Field label="Password" value={password} onChange={setPassword} placeholder="••••••••" type="password" />
-            <Field label="Phone" value={phone} onChange={setPhone} placeholder="+233..." type="tel" />
+            <Field
+              label="Full name"
+              value={fullName}
+              onChange={setFullName}
+              placeholder="Dr. Jane Doe"
+            />
+            <Field
+              label="Username (login)"
+              value={username}
+              onChange={setUsername}
+              placeholder="dr.jane"
+            />
+            <Field
+              label="Password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              type="password"
+            />
+            <Field
+              label="Phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="+233..."
+              type="tel"
+            />
           </div>
 
           <div className="py-2">
@@ -320,14 +566,16 @@ export default function AdminDoctorsPage() {
                   key={s.id}
                   onClick={() =>
                     setSelectedSpecialties((prev) =>
-                      prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
+                      prev.includes(s.id)
+                        ? prev.filter((id) => id !== s.id)
+                        : [...prev, s.id]
                     )
                   }
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs transition-colors",
                     selectedSpecialties.includes(s.id)
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:border-primary/40",
+                      : "text-muted-foreground hover:border-primary/40"
                   )}
                 >
                   {s.name}
@@ -337,27 +585,31 @@ export default function AdminDoctorsPage() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={handleCloseDialog}>Cancel</Button>
-            <Button onClick={createDoctor} disabled={saving}>{saving ? "Creating…" : "Create doctor"}</Button>
+            <Button variant="outline" onClick={handleCloseDialog}>
+              Cancel
+            </Button>
+            <Button onClick={createDoctor} disabled={saving}>
+              {saving ? "Creating…" : "Create doctor"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           placeholder="Search doctors…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-lg border bg-background py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full rounded-lg border bg-background py-2 pr-4 pl-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
         />
       </div>
 
       {loading ? (
         <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium uppercase text-muted-foreground">
+            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
                 <th className="px-4 py-3">Specialties</th>
@@ -400,7 +652,7 @@ export default function AdminDoctorsPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium uppercase text-muted-foreground">
+            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
                 <th className="px-4 py-3">Specialties</th>
@@ -418,33 +670,74 @@ export default function AdminDoctorsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
-                      {d.doctor_specialties && d.doctor_specialties.length > 0
-                        ? d.doctor_specialties.map((ds, i) => (
-                            <span key={i} className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                              {ds.specialties?.name}
-                            </span>
-                          ))
-                        : <span className="text-xs text-muted-foreground">No specialties</span>}
+                      {d.doctor_specialties &&
+                      d.doctor_specialties.length > 0 ? (
+                        d.doctor_specialties.map((ds, i) => (
+                          <span
+                            key={i}
+                            className="rounded-full bg-muted px-2 py-0.5 text-xs"
+                          >
+                            {ds.specialties?.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          No specialties
+                        </span>
+                      )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.phone ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {d.phone ?? "—"}
+                  </td>
                   <td className="px-4 py-3">
-                    <span className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-medium",
-                      d.doctor_settings?.[0]?.is_available !== false
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700",
-                    )}>
-                      {d.doctor_settings?.[0]?.is_available !== false ? "Available" : "Unavailable"}
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-xs font-medium",
+                        d.doctor_settings?.[0]?.is_available !== false
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      )}
+                    >
+                      {d.doctor_settings?.[0]?.is_available !== false
+                        ? "Available"
+                        : "Unavailable"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => openEdit(d)}
-                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <Pencil className="h-3 w-3" /> Edit
-                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setOpenDropdown(openDropdown === d.id ? null : d.id)
+                        }}
+                        className="flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        Actions <ChevronDown className="h-3 w-3" />
+                      </button>
+                      {openDropdown === d.id && (
+                        <div className="absolute top-full right-0 z-10 mt-1 w-40 rounded-lg border bg-background shadow-lg">
+                          <button
+                            onClick={() => {
+                              openSchedule(d)
+                              setOpenDropdown(null)
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                          >
+                            <Calendar className="h-3 w-3" /> View Schedule
+                          </button>
+                          <button
+                            onClick={() => {
+                              openEdit(d)
+                              setOpenDropdown(null)
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                          >
+                            <Pencil className="h-3 w-3" /> Edit Details
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -456,18 +749,38 @@ export default function AdminDoctorsPage() {
   )
 }
 
-function Field({ label, value, onChange, placeholder, type = "text" }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string
+function formatTime(time: string): string {
+  const [hours, minutes] = time.split(":")
+  const h = parseInt(hours, 10)
+  const ampm = h >= 12 ? "PM" : "AM"
+  const h12 = h % 12 || 12
+  return `${h12}:${minutes} ${ampm}`
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: string
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <label className="text-xs font-medium text-muted-foreground">
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
       />
     </div>
   )

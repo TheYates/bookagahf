@@ -6,7 +6,7 @@ import { sendHubtelSms } from "@/lib/notifications/hubtel"
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 // Generate a 6-digit OTP and store it in the otp_tokens table
@@ -14,7 +14,10 @@ export async function POST(request: Request) {
   const { identifier } = await request.json()
 
   if (!identifier) {
-    return NextResponse.json({ error: "Identifier is required" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Identifier is required" },
+      { status: 400 }
+    )
   }
 
   // Look up the profile by x_number or company_number using admin client (bypasses RLS)
@@ -31,7 +34,7 @@ export async function POST(request: Request) {
   if (!profile.phone) {
     return NextResponse.json(
       { error: "No phone number on file for this account" },
-      { status: 400 },
+      { status: 400 }
     )
   }
 

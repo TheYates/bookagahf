@@ -4,26 +4,74 @@ import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { CalendarDays, PlusCircle, Bell, User, LogOut, LayoutDashboard } from "lucide-react"
+import {
+  CalendarDays,
+  PlusCircle,
+  Bell,
+  User,
+  LogOut,
+  LayoutDashboard,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
 
 const TABS = [
   { href: "/client", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { href: "/client/appointments", label: "Appointments", icon: CalendarDays, exact: false },
+  {
+    href: "/client/appointments",
+    label: "Appointments",
+    icon: CalendarDays,
+    exact: false,
+  },
   { href: "/client/book", label: "Book", icon: PlusCircle, exact: false },
-  { href: "/client/notifications", label: "Notifications", icon: Bell, exact: false },
+  {
+    href: "/client/notifications",
+    label: "Notifications",
+    icon: Bell,
+    exact: false,
+  },
   { href: "/client/profile", label: "Profile", icon: User, exact: false },
 ]
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+export default function ClientLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const pathname = usePathname()
   const router = useRouter()
   const [unreadCount, setUnreadCount] = React.useState(0)
+  const [clientName, setClientName] = React.useState("")
+
+  React.useEffect(() => {
+    const fetchClientName = async () => {
+      const {
+        data: { user },
+      } = await supabaseBrowserClient.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabaseBrowserClient
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single()
+        const fullName =
+          profile?.full_name ?? user.user_metadata?.full_name ?? ""
+        const parts = fullName.split(" ")
+        const nameToShow =
+          parts.length >= 2
+            ? `${parts[0]} ${parts[1].charAt(0)}.`
+            : parts[0] || "Client"
+        setClientName(nameToShow)
+      }
+    }
+    void fetchClientName()
+  }, [])
 
   React.useEffect(() => {
     const fetchUnreadCount = async () => {
-      const { data: { user } } = await supabaseBrowserClient.auth.getUser()
+      const {
+        data: { user },
+      } = await supabaseBrowserClient.auth.getUser()
       if (!user) return
       const { count } = await supabaseBrowserClient
         .from("notifications")
@@ -37,12 +85,18 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
     const channel = supabaseBrowserClient
       .channel("client-layout-notifications")
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
-        void fetchUnreadCount()
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications" },
+        () => {
+          void fetchUnreadCount()
+        }
+      )
       .subscribe()
 
-    return () => { void supabaseBrowserClient.removeChannel(channel) }
+    return () => {
+      void supabaseBrowserClient.removeChannel(channel)
+    }
   }, [])
 
   const handleLogout = async () => {
@@ -78,13 +132,17 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 priority
               />
               <div className="hidden sm:block">
-                <p className="text-xs leading-none text-muted-foreground">AGAHF</p>
-                <p className="text-sm font-bold leading-tight">Client Portal</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  AGAHF
+                </p>
+                <p className="text-sm leading-tight font-bold">
+                  {clientName || "Client"}
+                </p>
               </div>
             </Link>
 
             {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center gap-6 ml-4">
+            <nav className="ml-4 hidden items-center gap-6 md:flex">
               {TABS.map(({ href, label, exact }) => {
                 const active = isActive(href, exact)
                 return (
@@ -92,13 +150,13 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     key={href}
                     href={href}
                     className={cn(
-                      "text-sm font-medium transition-colors hover:text-primary relative py-2",
+                      "relative py-2 text-sm font-medium transition-colors hover:text-primary",
                       active ? "text-primary" : "text-muted-foreground"
                     )}
                   >
                     {label}
                     {active && (
-                      <span className="absolute bottom-0 left-0 h-0.5 w-full bg-primary rounded-t-full" />
+                      <span className="absolute bottom-0 left-0 h-0.5 w-full rounded-t-full bg-primary" />
                     )}
                   </Link>
                 )
@@ -114,12 +172,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             >
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
+                <span className="absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
             </Link>
-            <div className="h-6 w-px bg-border hidden md:block mx-1" />
+            <div className="mx-1 hidden h-6 w-px bg-border md:block" />
             <button
               onClick={handleLogout}
               title="Sign out"
@@ -139,7 +197,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       </main>
 
       {/* ── Bottom tab bar (Mobile Only) ── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-safe">
+      <nav className="pb-safe fixed right-0 bottom-0 left-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
         <div className="flex h-16 items-center justify-around px-2">
           {TABS.map(({ href, label, icon: Icon, exact }) => {
             const active = isActive(href, exact)
@@ -149,13 +207,20 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 href={href}
                 className={cn(
                   "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg py-2 text-xs font-medium transition-colors",
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                  active
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <div className="relative">
-                  <Icon className={cn("h-5 w-5 transition-transform", active && "scale-110")} />
+                  <Icon
+                    className={cn(
+                      "h-5 w-5 transition-transform",
+                      active && "scale-110"
+                    )}
+                  />
                   {href === "/client/notifications" && unreadCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white ring-2 ring-background">
+                    <span className="absolute -top-1 -right-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white ring-2 ring-background">
                       {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}

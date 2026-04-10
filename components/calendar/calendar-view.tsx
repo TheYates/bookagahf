@@ -45,7 +45,7 @@ interface Department {
 
 interface CalendarViewProps {
   userRole: "client" | "receptionist" | "admin" | "reviewer"
-  currentUserId?: number
+  currentUserId?: string
 }
 
 export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
@@ -139,7 +139,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           const hours = scheduledDate.getHours()
           const minutes = scheduledDate.getMinutes()
           const timeString = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
-          
+
           return {
             id: apt.id,
             clientId: apt.created_by || apt.clientId || "",
@@ -346,7 +346,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   const handleDrop = (
     e: React.DragEvent,
     targetDate: Date,
-    targetTime: string,
+    targetTime: string
   ) => {
     e.preventDefault()
     if (!draggedAppointment) return
@@ -362,7 +362,8 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
     if (existingAppointment) {
       toast.error("Time Slot Occupied", {
-        description: "This time slot is already occupied by another appointment",
+        description:
+          "This time slot is already occupied by another appointment",
         duration: 4000,
       })
       setDraggedAppointment(null)
@@ -403,10 +404,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     })
 
     return (
-      <div className="flex flex-col h-full min-h-0">
-        <div className="flex-none flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
-          <h2 className="text-xl sm:text-2xl font-bold">{monthName}</h2>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-2 flex flex-none flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold sm:text-2xl">{monthName}</h2>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -434,13 +435,13 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           </div>
         </div>
 
-        <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* Header row */}
           <div className="grid grid-cols-7 gap-1">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
               <div
                 key={day}
-                className="p-2 text-center font-medium text-sm text-muted-foreground h-10"
+                className="h-10 p-2 text-center text-sm font-medium text-muted-foreground"
               >
                 {day}
               </div>
@@ -448,16 +449,19 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           </div>
 
           {/* Calendar grid - fills remaining space */}
-          <div className="grid grid-cols-7 gap-1 flex-1 auto-rows-fr">
+          <div className="grid flex-1 auto-rows-fr grid-cols-7 gap-1">
             {days.map((day, index) => {
               if (!day) {
-                return <div key={index} className="border rounded-lg" />
+                return <div key={index} className="rounded-lg border" />
               }
 
               const dayAppointments = getAppointmentsForDate(day)
               const isToday = new Date().toDateString() === day.toDateString()
               const isPast = isPastDate(day)
-              const isWorkingDay = isWorkingDayForAnyDepartment(departments as any, day)
+              const isWorkingDay = isWorkingDayForAnyDepartment(
+                departments as any,
+                day
+              )
               const isValidForBooking = isValidBookingDate(
                 day,
                 undefined,
@@ -468,22 +472,32 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 <div
                   key={index}
                   className={cn(
-                    "p-2 border rounded-lg flex flex-col min-h-0 overflow-hidden",
-                    isPast && "hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600 cursor-not-allowed",
-                    !isWorkingDay && !isPast && "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed",
+                    "flex min-h-0 flex-col overflow-hidden rounded-lg border p-2",
+                    isPast &&
+                      "cursor-not-allowed hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400",
+                    !isWorkingDay &&
+                      !isPast &&
+                      "cursor-not-allowed bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
                     !isPast && isWorkingDay && "cursor-pointer"
                   )}
-                  onClick={() => isValidForBooking && !isPast && handleBookSlot(day, "08:00")}
-                  onDragOver={isValidForBooking && !isPast ? handleDragOver : undefined}
+                  onClick={() =>
+                    isValidForBooking && !isPast && handleBookSlot(day, "08:00")
+                  }
+                  onDragOver={
+                    isValidForBooking && !isPast ? handleDragOver : undefined
+                  }
                   onDrop={
-                    isValidForBooking && !isPast ? (e) => handleDrop(e, day, "08:00") : undefined
+                    isValidForBooking && !isPast
+                      ? (e) => handleDrop(e, day, "08:00")
+                      : undefined
                   }
                 >
-                  <div className="flex justify-between items-start mb-1">
+                  <div className="mb-1 flex items-start justify-between">
                     <span
                       className={cn(
                         "text-sm font-medium text-foreground",
-                        isToday && "font-bold text-green-600 dark:text-green-400",
+                        isToday &&
+                          "font-bold text-green-600 dark:text-green-400",
                         isPast && "text-gray-400 dark:text-gray-500"
                       )}
                     >
@@ -491,14 +505,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                     </span>
                   </div>
 
-                  <div className="space-y-1 flex-1 overflow-hidden">
+                  <div className="flex-1 space-y-1 overflow-hidden">
                     {dayAppointments.slice(0, 2).map((apt) => {
                       const isPastApt = isPastAppointment(apt)
                       return (
                         <div
                           key={apt.id}
                           className={cn(
-                            "text-xs p-1 rounded truncate border-l-2",
+                            "truncate rounded border-l-2 p-1 text-xs",
                             isPastApt
                               ? "cursor-not-allowed opacity-50"
                               : "cursor-pointer"
@@ -507,7 +521,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                             backgroundColor:
                               getDepartmentColor(apt.departmentId) + "20",
                             color: getDepartmentColor(apt.departmentId),
-                            borderLeftColor: getDepartmentColor(apt.departmentId),
+                            borderLeftColor: getDepartmentColor(
+                              apt.departmentId
+                            ),
                           }}
                           onClick={(e) => {
                             e.stopPropagation()
@@ -518,22 +534,25 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                             if (!isPastApt) handleDragStart(e, apt)
                           }}
                         >
-                        <div className="font-medium text-xs truncate">
-                          {userRole === "client" && apt.clientId !== currentUserId?.toString()
-                            ? `${maskXNumber(apt.clientXNumber, false)} - ***`
-                            : `${apt.clientXNumber ?? "—"} - ${apt.clientName}`}
+                          <div className="truncate text-xs font-medium">
+                            {userRole === "client" &&
+                            apt.clientId !== currentUserId?.toString()
+                              ? `${maskXNumber(apt.clientXNumber, false)} - ***`
+                              : `${apt.clientXNumber ?? "—"} - ${apt.clientName}`}
+                          </div>
+                          <div className="truncate text-xs opacity-60">
+                            {apt.departmentName}
+                          </div>
                         </div>
-                        <div className="opacity-60 text-xs truncate">
-                          {apt.departmentName}
-                        </div>
-                      </div>
                       )
                     })}
                     {dayAppointments.length > 2 && (
                       <DayAppointmentsPopover
                         appointments={dayAppointments}
                         date={day}
-                        getDepartmentColor={(id) => getDepartmentColor(id.toString())}
+                        getDepartmentColor={(id) =>
+                          getDepartmentColor(id.toString())
+                        }
                         maskXNumber={maskXNumber}
                         currentUserId={currentUserId}
                         userRole={userRole}
@@ -541,7 +560,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                         onDragStart={handleDragStart}
                         isPast={isPast}
                       >
-                        <div className="text-xs text-muted-foreground cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                        <div className="cursor-pointer text-xs text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400">
                           +{dayAppointments.length - 2} more
                         </div>
                       </DayAppointmentsPopover>
@@ -571,9 +590,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
     return (
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h2 className="text-xl sm:text-2xl font-bold">{weekRange}</h2>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold sm:text-2xl">{weekRange}</h2>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -602,14 +621,17 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         </div>
 
         <div className="flex flex-col">
-          <div className="grid grid-cols-8 gap-2 mb-2">
-            <div className="h-16 flex items-center justify-center font-medium text-sm text-muted-foreground">
+          <div className="mb-2 grid grid-cols-8 gap-2">
+            <div className="flex h-16 items-center justify-center text-sm font-medium text-muted-foreground">
               Slots
             </div>
             {weekDays.map((day, dayIndex) => {
               const isToday = new Date().toDateString() === day.toDateString()
               const isPast = isPastDate(day)
-              const isWorkingDay = isWorkingDayForAnyDepartment(departments as any, day)
+              const isWorkingDay = isWorkingDayForAnyDepartment(
+                departments as any,
+                day
+              )
               const isValidForBooking = isValidBookingDate(
                 day,
                 undefined,
@@ -620,18 +642,20 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 <div
                   key={dayIndex}
                   className={cn(
-                    "h-16 p-2 border rounded-lg transition-colors flex flex-col items-center justify-center",
+                    "flex h-16 flex-col items-center justify-center rounded-lg border p-2 transition-colors",
                     isPast
-                      ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-600"
+                      ? "cursor-not-allowed bg-gray-100 text-gray-400 hover:border-red-300 hover:bg-red-100 hover:text-red-600 dark:bg-gray-800 dark:text-gray-500 dark:hover:border-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                       : !isWorkingDay
-                      ? "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
-                      : "cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/20 hover:border-green-300 dark:hover:border-green-600",
+                        ? "cursor-not-allowed bg-gray-50 text-gray-500 opacity-60 dark:bg-gray-800 dark:text-gray-400"
+                        : "cursor-pointer hover:border-green-300 hover:bg-green-50 dark:hover:border-green-600 dark:hover:bg-green-900/20",
                     isToday &&
                       !isPast &&
                       isWorkingDay &&
                       "bg-blue-50 dark:bg-blue-900/20"
                   )}
-                  onClick={() => isValidForBooking && handleBookSlot(day, "08:00")}
+                  onClick={() =>
+                    isValidForBooking && handleBookSlot(day, "08:00")
+                  }
                 >
                   <div className="text-xs text-muted-foreground">
                     {day.toLocaleDateString("en-US", { weekday: "short" })}
@@ -656,7 +680,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                 {generateTimeSlotsDisplay().map((timeDisplay) => (
                   <div
                     key={timeDisplay}
-                    className="h-16 flex items-center justify-center text-sm font-medium bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded"
+                    className="flex h-16 items-center justify-center rounded bg-gray-50 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300"
                   >
                     {timeDisplay}
                   </div>
@@ -666,7 +690,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
               {weekDays.map((day, dayIndex) => {
                 const dayAppointments = getAppointmentsForDate(day)
                 const isPast = isPastDate(day)
-                const isWorkingDay = isWorkingDayForAnyDepartment(departments as any, day)
+                const isWorkingDay = isWorkingDayForAnyDepartment(
+                  departments as any,
+                  day
+                )
                 const isValidForBooking = isValidBookingDate(
                   day,
                   undefined,
@@ -685,14 +712,14 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                         <div
                           key={time}
                           className={cn(
-                            "h-16 p-2 border rounded transition-colors",
+                            "h-16 rounded border p-2 transition-colors",
                             appointment
-                              ? "border-l-4 cursor-pointer"
+                              ? "cursor-pointer border-l-4"
                               : isPast
-                              ? "cursor-not-allowed"
-                              : !isWorkingDay
-                              ? "cursor-not-allowed bg-gray-50 dark:bg-gray-800 opacity-60"
-                              : "cursor-pointer"
+                                ? "cursor-not-allowed"
+                                : !isWorkingDay
+                                  ? "cursor-not-allowed bg-gray-50 opacity-60 dark:bg-gray-800"
+                                  : "cursor-pointer"
                           )}
                           style={
                             appointment
@@ -715,15 +742,25 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                               handleBookSlot(day, time)
                             }
                           }}
-                          onDragOver={!isPast && isValidForBooking ? handleDragOver : undefined}
-                          onDrop={!isPast && isValidForBooking ? (e) => handleDrop(e, day, time) : undefined}
+                          onDragOver={
+                            !isPast && isValidForBooking
+                              ? handleDragOver
+                              : undefined
+                          }
+                          onDrop={
+                            !isPast && isValidForBooking
+                              ? (e) => handleDrop(e, day, time)
+                              : undefined
+                          }
                         >
                           {appointment ? (
                             timeAppointments.length > 1 ? (
                               <DayAppointmentsPopover
                                 appointments={timeAppointments}
                                 date={day}
-                                getDepartmentColor={(id) => getDepartmentColor(id.toString())}
+                                getDepartmentColor={(id) =>
+                                  getDepartmentColor(id.toString())
+                                }
                                 maskXNumber={maskXNumber}
                                 currentUserId={currentUserId}
                                 userRole={userRole}
@@ -731,15 +768,16 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                 onDragStart={handleDragStart}
                                 isPast={isPast}
                               >
-                                <div className="h-full flex flex-col justify-center relative cursor-pointer">
-                                  <div className="text-xs font-medium truncate">
+                                <div className="relative flex h-full cursor-pointer flex-col justify-center">
+                                  <div className="truncate text-xs font-medium">
                                     {maskXNumber(
                                       appointment.clientXNumber,
-                                      appointment.clientId === currentUserId?.toString()
+                                      appointment.clientId ===
+                                        currentUserId?.toString()
                                     )}
                                   </div>
                                   <div
-                                    className="text-xs truncate"
+                                    className="truncate text-xs"
                                     style={{
                                       color: getDepartmentColor(
                                         appointment.departmentId
@@ -748,7 +786,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   >
                                     {appointment.departmentName}
                                   </div>
-                                  <div className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                                  <div className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
                                     {timeAppointments.length}
                                   </div>
                                 </div>
@@ -756,7 +794,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                             ) : (
                               <div
                                 className={cn(
-                                  "h-full flex flex-col justify-center",
+                                  "flex h-full flex-col justify-center",
                                   isPastAppointment(appointment)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
@@ -768,14 +806,15 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                                   }
                                 }}
                               >
-                                <div className="text-xs font-medium truncate">
+                                <div className="truncate text-xs font-medium">
                                   {maskXNumber(
                                     appointment.clientXNumber,
-                                    appointment.clientId === currentUserId?.toString()
+                                    appointment.clientId ===
+                                      currentUserId?.toString()
                                   )}
                                 </div>
                                 <div
-                                  className="text-xs truncate"
+                                  className="truncate text-xs"
                                   style={{
                                     color: getDepartmentColor(
                                       appointment.departmentId
@@ -787,7 +826,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                               </div>
                             )
                           ) : (
-                            <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
                               {isPast ? "Empty" : "Available"}
                             </div>
                           )}
@@ -814,27 +853,37 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   const generateTimeSlots = () => {
     const defaultStart = 8
     const defaultEnd = 17
-    
+
     if (departments.length === 0) {
       const slots: string[] = []
-      for (let mins = defaultStart * 60; mins < defaultEnd * 60; mins += appointmentDuration) {
+      for (
+        let mins = defaultStart * 60;
+        mins < defaultEnd * 60;
+        mins += appointmentDuration
+      ) {
         const h = Math.floor(mins / 60)
         const m = mins % 60
-        slots.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`)
+        slots.push(
+          `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
+        )
       }
       return slots
     }
-    
+
     const allSlots: string[] = []
     departments.forEach((dept) => {
       if (dept.working_hours && dept.is_active) {
         const [startH, startM] = dept.working_hours.start.split(":").map(Number)
         const [endH, endM] = dept.working_hours.end.split(":").map(Number)
-        
+
         const startMinutes = startH * 60 + startM
         const endMinutes = endH * 60 + endM
-        
-        for (let mins = startMinutes; mins < endMinutes; mins += appointmentDuration) {
+
+        for (
+          let mins = startMinutes;
+          mins < endMinutes;
+          mins += appointmentDuration
+        ) {
           const h = Math.floor(mins / 60)
           const m = mins % 60
           const timeStr = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`
@@ -844,12 +893,12 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
         }
       }
     })
-    
+
     return allSlots.sort()
   }
 
   const generateTimeSlotsDisplay = () => {
-    return generateTimeSlots().map(time => formatTime12hr(time))
+    return generateTimeSlots().map((time) => formatTime12hr(time))
   }
 
   const getAppointmentsForTimeSlot = (date: Date, timeSlot: string) => {
@@ -871,7 +920,10 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
     const timeSlots = generateTimeSlotsDisplay()
     const timeSlots24 = generateTimeSlots()
     const isPast = isPastDate(currentDate)
-    const isWorkingDay = isWorkingDayForAnyDepartment(departments as any, currentDate)
+    const isWorkingDay = isWorkingDayForAnyDepartment(
+      departments as any,
+      currentDate
+    )
     const isValidForBooking = isValidBookingDate(
       currentDate,
       undefined,
@@ -880,9 +932,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
     return (
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h2 className="text-xl sm:text-2xl font-bold">{dateString}</h2>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold sm:text-2xl">{dateString}</h2>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
             <div className="flex items-center gap-1">
               <Button
                 variant="outline"
@@ -910,7 +962,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
           </div>
         </div>
 
-        <div className="space-y-2 h-[600px] overflow-y-auto pr-2">
+        <div className="h-[600px] space-y-2 overflow-y-auto pr-2">
           {timeSlots.map((timeSlot, index) => {
             const time24 = timeSlots24[index]
             const slotAppointments = getAppointmentsForTimeSlot(
@@ -920,30 +972,36 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
 
             return (
               <div key={timeSlot} className="flex items-start gap-4">
-                <div className="w-16 text-sm text-gray-500 dark:text-gray-400 text-right pt-2">
+                <div className="w-16 pt-2 text-right text-sm text-gray-500 dark:text-gray-400">
                   {timeSlot}
                 </div>
                 <div
                   className={cn(
-                    "flex-1 p-3 border dark:border-gray-700 rounded-lg transition-colors min-h-[60px]",
-                    isPast && "opacity-60 cursor-not-allowed",
+                    "min-h-[60px] flex-1 rounded-lg border p-3 transition-colors dark:border-gray-700",
+                    isPast && "cursor-not-allowed opacity-60",
                     !isWorkingDay &&
                       !isPast &&
-                      "bg-gray-50 dark:bg-gray-800 opacity-60 cursor-not-allowed",
+                      "cursor-not-allowed bg-gray-50 opacity-60 dark:bg-gray-800",
                     !isPast && isValidForBooking && "cursor-pointer"
                   )}
                   onClick={() => {
                     if (isPast || !isValidForBooking) return
                     handleBookSlot(currentDate, time24)
                   }}
-                  onDragOver={!isPast && isValidForBooking ? handleDragOver : undefined}
-                  onDrop={!isPast && isValidForBooking ? (e) => {
-                    handleDrop(e, currentDate, time24)
-                  } : undefined}
+                  onDragOver={
+                    !isPast && isValidForBooking ? handleDragOver : undefined
+                  }
+                  onDrop={
+                    !isPast && isValidForBooking
+                      ? (e) => {
+                          handleDrop(e, currentDate, time24)
+                        }
+                      : undefined
+                  }
                 >
                   {slotAppointments.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-600">
-                      <Plus className="w-4 h-4 mr-2" />
+                    <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-600">
+                      <Plus className="mr-2 h-4 w-4" />
                       {isPast ? "Empty" : "Available"}
                     </div>
                   ) : (
@@ -952,9 +1010,9 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                         <div
                           key={appointment.id}
                           className={cn(
-                            "p-2 rounded-lg text-white flex-1 min-w-[160px] max-w-[220px]",
+                            "max-w-[220px] min-w-[160px] flex-1 rounded-lg p-2 text-white",
                             isPastAppointment(appointment)
-                              ? "opacity-50 cursor-not-allowed"
+                              ? "cursor-not-allowed opacity-50"
                               : "cursor-pointer"
                           )}
                           style={{
@@ -975,22 +1033,23 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
                             }
                           }}
                         >
-                          <div className="font-medium text-sm flex items-center gap-1">
+                          <div className="flex items-center gap-1 text-sm font-medium">
                             <span className="opacity-75">
                               {maskXNumber(
                                 appointment.clientXNumber,
-                                appointment.clientId === currentUserId?.toString()
+                                appointment.clientId ===
+                                  currentUserId?.toString()
                               )}
                             </span>
                           </div>
-                          <div className="truncate text-sm mt-1">
+                          <div className="mt-1 truncate text-sm">
                             {userRole === "client" &&
                             appointment.clientId !== currentUserId?.toString()
                               ? "*** ***"
                               : appointment.clientName}
                           </div>
                           {appointment.notes && (
-                            <div className="opacity-75 text-xs mt-1 truncate">
+                            <div className="mt-1 truncate text-xs opacity-75">
                               {userRole === "client" &&
                               appointment.clientId !== currentUserId?.toString()
                                 ? "***"
@@ -1011,7 +1070,7 @@ export function CalendarView({ userRole, currentUserId }: CalendarViewProps) {
   }
 
   return (
-    <div className="space-y-6 flex flex-col h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-col space-y-6">
       {view === "month" && renderMonthView()}
       {view === "week" && renderWeekView()}
       {view === "day" && renderDayView()}

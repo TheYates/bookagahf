@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 /**
@@ -13,7 +13,7 @@ const adminClient = createClient(
  */
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
 
@@ -25,18 +25,29 @@ export async function GET(
     .single()
 
   if (settings?.is_available === false) {
-    return NextResponse.json({ availableDays: [], unavailable: true })
+    return NextResponse.json({
+      availableDays: [],
+      unavailable: true,
+      schedule: [],
+    })
   }
 
+  // Get full availability schedule with times
   const { data, error } = await adminClient
     .from("doctor_availability")
-    .select("day_of_week")
+    .select("day_of_week, start_time, end_time")
     .eq("doctor_id", id)
     .eq("is_active", true)
+    .order("day_of_week")
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  const availableDays = [...new Set((data ?? []).map((r) => r.day_of_week))]
+  const schedule = data ?? []
+  const availableDays = [...new Set(schedule.map((r) => r.day_of_week))]
 
-  return NextResponse.json({ availableDays, unavailable: false })
+  return NextResponse.json({
+    availableDays,
+    unavailable: false,
+    schedule,
+  })
 }

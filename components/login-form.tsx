@@ -34,7 +34,11 @@ function maskPhone(phone: string): string {
   if (!phone) return "your registered number"
   const digits = phone.replace(/\D/g, "")
   if (digits.length < 5) return phone
-  return phone.slice(0, 3) + "*".repeat(Math.max(0, phone.length - 5)) + phone.slice(-2)
+  return (
+    phone.slice(0, 3) +
+    "*".repeat(Math.max(0, phone.length - 5)) +
+    phone.slice(-2)
+  )
 }
 
 // ─── Animations ──────────────────────────────────────────────────────────────
@@ -64,7 +68,10 @@ const slideDown = {
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
-interface LoginFormProps extends React.HTMLAttributes<HTMLDivElement> {
+interface LoginFormProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onSubmit"
+> {
   imageUrl?: string
   hospitalName?: string
   hospitalShortName?: string
@@ -93,7 +100,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
       onRequestOtp,
       ...props
     },
-    ref,
+    ref
   ) => {
     const [identifier, setIdentifier] = React.useState("")
     const [credential, setCredential] = React.useState("")
@@ -101,7 +108,9 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
     const [maskedPhone, setMaskedPhone] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState<string | null>(null)
-    const [identifierError, setIdentifierError] = React.useState<string | null>(null)
+    const [identifierError, setIdentifierError] = React.useState<string | null>(
+      null
+    )
     const identifierRef = React.useRef<HTMLInputElement>(null)
     const credentialRef = React.useRef<HTMLInputElement>(null)
 
@@ -114,7 +123,8 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
     const isStaff = inputType === "staff" && !/^[xX\d]/.test(identifier.trim())
 
     // For staff the credential input is shown after they start typing; for others after OTP is sent
-    const showCredential = (isStaff && identifier.trim().length > 0) || step === "otp-sent"
+    const showCredential =
+      (isStaff && identifier.trim().length > 0) || step === "otp-sent"
 
     const credentialPlaceholder = isStaff
       ? "Password"
@@ -157,7 +167,9 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
     }
 
     // Pressing Enter in the identifier field triggers OTP send for non-staff
-    const handleIdentifierKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleIdentifierKeyDown = (
+      e: React.KeyboardEvent<HTMLInputElement>
+    ) => {
       if (e.key === "Enter") {
         e.preventDefault()
         if (isStaff) return // staff will submit the form normally
@@ -178,13 +190,19 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
       }
 
       if (!credential.trim()) {
-        setError(isStaff ? "Please enter your password." : "Please enter the OTP.")
+        setError(
+          isStaff ? "Please enter your password." : "Please enter the OTP."
+        )
         return
       }
 
       setLoading(true)
       try {
-        await onSubmit({ identifier: identifier.trim(), credential, type: inputType })
+        await onSubmit({
+          identifier: identifier.trim(),
+          credential,
+          type: inputType,
+        })
       } catch (err: any) {
         setError(err?.message ?? "Authentication failed. Please try again.")
       } finally {
@@ -199,7 +217,6 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
         {...props}
       >
         <div className="grid grid-cols-1 items-center gap-8 overflow-hidden rounded-lg bg-background lg:grid-cols-2">
-
           {/* ── Left Side: Form ── */}
           <motion.div
             className="p-4 sm:p-8"
@@ -208,7 +225,10 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
             animate="visible"
           >
             {/* Brand row */}
-            <motion.div variants={itemVariants} className="mb-6 flex items-center gap-3">
+            <motion.div
+              variants={itemVariants}
+              className="mb-6 flex items-center gap-3"
+            >
               <Image
                 src="/agahflogo.svg"
                 alt={`${hospitalShortName} logo`}
@@ -226,8 +246,10 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                 priority
               />
               <div>
-                <p className="text-xs text-muted-foreground">{hospitalShortName}</p>
-                <p className="text-sm font-semibold leading-tight text-foreground">
+                <p className="text-xs text-muted-foreground">
+                  {hospitalShortName}
+                </p>
+                <p className="text-sm leading-tight font-semibold text-foreground">
                   {hospitalName}
                 </p>
               </div>
@@ -248,7 +270,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
               >
                 {/* Dashed connector line — only visible when second input is shown */}
                 {showCredential && (
-                  <div className="absolute bottom-9 left-6 top-9 w-px border-l border-dashed border-border" />
+                  <div className="absolute top-9 bottom-9 left-6 w-px border-l border-dashed border-border" />
                 )}
 
                 {/* ── First input — identifier ── */}
@@ -277,7 +299,8 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                         if (digits.length <= 5) {
                           val = "X" + digits
                         } else {
-                          val = "X" + digits.slice(0, 5) + "/" + digits.slice(5, 7)
+                          val =
+                            "X" + digits.slice(0, 5) + "/" + digits.slice(5, 7)
                         }
                       }
 
@@ -289,7 +312,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                       setIdentifierError(null)
                     }}
                     onKeyDown={handleIdentifierKeyDown}
-                    className="w-full bg-transparent py-2 pl-4 pr-10 text-foreground focus:outline-none"
+                    className="w-full bg-transparent py-2 pr-10 pl-4 text-foreground focus:outline-none"
                     aria-label="Identifier"
                     autoComplete="username"
                     spellCheck={false}
@@ -335,7 +358,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                         <motion.p
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          className="mb-2 mt-3 pl-10 text-xs text-muted-foreground"
+                          className="mt-3 mb-2 pl-10 text-xs text-muted-foreground"
                         >
                           OTP sent to{" "}
                           <span className="font-medium text-foreground">
@@ -378,7 +401,9 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                           }}
                           className="w-full bg-transparent py-2 pl-4 text-foreground focus:outline-none"
                           aria-label="Credential"
-                          autoComplete={isStaff ? "current-password" : "one-time-code"}
+                          autoComplete={
+                            isStaff ? "current-password" : "one-time-code"
+                          }
                           inputMode={isStaff ? undefined : "numeric"}
                           maxLength={isStaff ? undefined : 6}
                         />
@@ -407,7 +432,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
                 <button
                   type="submit"
                   disabled={loading || (!isStaff && step !== "otp-sent")}
-                  className="inline-flex h-12 items-center justify-center whitespace-nowrap rounded-md bg-primary px-8 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex h-12 items-center justify-center rounded-md bg-primary px-8 text-sm font-medium whitespace-nowrap text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50"
                 >
                   {loading ? "Please wait…" : "Continue"}
                 </button>
@@ -425,7 +450,7 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
 
           {/* ── Right Side: Image ── */}
           <motion.div
-            className="hidden w-full h-full lg:block"
+            className="hidden h-full w-full lg:block"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
@@ -433,13 +458,13 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
             <img
               src={imageUrl}
               alt="Hospital appointment illustration"
-              className="w-full h-full object-cover rounded-lg"
+              className="h-full w-full rounded-lg object-cover"
             />
           </motion.div>
         </div>
       </div>
     )
-  },
+  }
 )
 
 LoginForm.displayName = "LoginForm"

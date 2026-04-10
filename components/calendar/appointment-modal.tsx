@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { Calendar, Clock, User, Stethoscope, FileText, Trash2 } from "lucide-react"
+import {
+  Calendar,
+  Clock,
+  User,
+  Stethoscope,
+  FileText,
+  Trash2,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -42,9 +49,9 @@ interface AppointmentModalProps {
   onClose: () => void
   appointment: Appointment | null
   userRole: "client" | "receptionist" | "admin" | "reviewer"
-  currentUserId?: number
+  currentUserId?: string
   onAppointmentUpdate?: (appointment: Appointment) => void
-  onAppointmentDelete?: (appointmentId: number) => void
+  onAppointmentDelete?: (appointmentId: string) => void
 }
 
 const STATUSES = [
@@ -289,13 +296,13 @@ export function AppointmentModal({
             </div>
 
             {isEditable && !isPast && (
-              <div className="flex justify-between pt-4 border-t">
+              <div className="flex justify-between border-t pt-4">
                 <Button
                   variant="destructive"
                   size="sm"
                   onClick={() => setShowDeleteConfirm(true)}
                 >
-                  <Trash2 className="h-4 w-4 mr-1" />
+                  <Trash2 className="mr-1 h-4 w-4" />
                   Delete
                 </Button>
 
@@ -305,7 +312,7 @@ export function AppointmentModal({
               </div>
             )}
             {isEditable && isPast && (
-              <div className="pt-4 border-t">
+              <div className="border-t pt-4">
                 <Button variant="outline" onClick={handleClose}>
                   Close
                 </Button>
@@ -320,14 +327,22 @@ export function AppointmentModal({
           <DialogHeader>
             <DialogTitle>Delete Appointment?</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. Are you sure you want to delete this appointment?
+              This action cannot be undone. Are you sure you want to delete this
+              appointment?
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={loading}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={loading}
+            >
               Delete
             </Button>
           </div>

@@ -13,7 +13,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
+import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -22,6 +24,10 @@ type Doctor = {
   id: string
   full_name: string
   doctor_specialties: { specialty_id: string }[] | null
+  doctor_settings:
+    | { is_available: boolean }[]
+    | { is_available: boolean }
+    | null
 }
 type BookingFor = "self" | "dependent"
 
@@ -31,8 +37,27 @@ const STEPS = ["Doctor & Specialty", "Date & Time", "Details", "Confirm"]
 
 const slide = {
   hidden: (dir: number) => ({ x: dir * 40, opacity: 0 }),
-  visible: { x: 0, opacity: 1, transition: { type: "spring", stiffness: 120, damping: 18 } },
-  exit: (dir: number) => ({ x: dir * -40, opacity: 0, transition: { duration: 0.15 } }),
+  visible: {
+    x: 0,
+    opacity: 1,
+    transition: { type: "spring", stiffness: 120, damping: 18 },
+  },
+  exit: (dir: number) => ({
+    x: dir * -40,
+    opacity: 0,
+    transition: { duration: 0.15 },
+  }),
+}
+
+const isDoctorUnavailable = (doc: Doctor) => {
+  const settings = doc.doctor_settings
+  if (Array.isArray(settings)) {
+    return settings[0]?.is_available === false
+  }
+  if (settings && "is_available" in settings) {
+    return settings.is_available === false
+  }
+  return false
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -48,7 +73,9 @@ export default function BookAppointmentPage() {
 
   // Step 0 selections
   const [doctorSearch, setDoctorSearch] = React.useState("")
-  const [selectedSpecialtyId, setSelectedSpecialtyId] = React.useState<string | null>(null)
+  const [selectedSpecialtyId, setSelectedSpecialtyId] = React.useState<
+    string | null
+  >(null)
   const [doctorId, setDoctorId] = React.useState("")
   const [specialtyId, setSpecialtyId] = React.useState("")
 
@@ -57,7 +84,9 @@ export default function BookAppointmentPage() {
   const [slot, setSlot] = React.useState("")
   const [slots, setSlots] = React.useState<string[]>([])
   const [slotsLoading, setSlotsLoading] = React.useState(false)
-  const [availableDays, setAvailableDays] = React.useState<number[] | undefined>(undefined)
+  const [availableDays, setAvailableDays] = React.useState<
+    number[] | undefined
+  >(undefined)
 
   // Step 2
   const [bookingFor, setBookingFor] = React.useState<BookingFor>("self")
@@ -74,28 +103,37 @@ export default function BookAppointmentPage() {
   const [success, setSuccess] = React.useState(false)
   const [profileLoading, setProfileLoading] = React.useState(false)
 
+  const fetchDoctors = React.useCallback(async () => {
+    const res = await fetch("/api/doctors")
+    const data = await res.json()
+    return data.doctors ?? []
+  }, [])
+
+  const refreshDoctors = React.useCallback(async () => {
+    const doctors = await fetchDoctors()
+    setAllDoctors(doctors)
+  }, [fetchDoctors])
+
   // ── Load all doctors + specialties + current user profile on mount
   React.useEffect(() => {
     setProfileLoading(true)
     Promise.all([
       fetch("/api/specialties").then((r) => r.json()),
-      fetch("/api/doctors").then((r) => r.json()),
-      import("@/lib/supabase/client").then(({ supabaseBrowserClient }) =>
-        supabaseBrowserClient.auth
-          .getUser()
-          .then(({ data: { user } }) =>
-            user
-              ? supabaseBrowserClient
-                  .from("profiles")
-                  .select("full_name, x_number, company_number, phone")
-                  .eq("id", user.id)
-                  .single()
-              : { data: null } as any,
-          ),
-      ),
-    ]).then(([s, d, profileRes]) => {
+      fetchDoctors(),
+      supabaseBrowserClient.auth
+        .getUser()
+        .then(({ data: { user } }) =>
+          user
+            ? supabaseBrowserClient
+                .from("profiles")
+                .select("full_name, x_number, company_number, phone")
+                .eq("id", user.id)
+                .single()
+            : ({ data: null } as any)
+        ),
+    ]).then(([s, doctors, profileRes]) => {
       setSpecialties(s.specialties ?? [])
-      setAllDoctors(d.doctors ?? [])
+      setAllDoctors(doctors ?? [])
       const profile = (profileRes as any)?.data
       if (profile) {
         setPatientName(profile.full_name ?? "")
@@ -106,23 +144,73 @@ export default function BookAppointmentPage() {
       setDataLoading(false)
       setProfileLoading(false)
     })
-  }, [])
+  }, [fetchDoctors])
+
+  // Manual refresh for doctors
+  const [refreshing, setRefreshing] = React.useState(false)
+  const handleRefreshDoctors = async () => {
+    setRefreshing(true)
+    const res = await fetch("/api/doctors")
+    const data = await res.json()
+    setAllDoctors(data.doctors ?? [])
+    setRefreshing(false)
+  }
 
   // ── Derive filtered doctors from search + specialty filter
   const filteredDoctors = React.useMemo(() => {
     let docs = allDoctors
     if (selectedSpecialtyId) {
       docs = docs.filter((d) =>
-        d.doctor_specialties?.some((s) => s.specialty_id === selectedSpecialtyId),
+        d.doctor_specialties?.some(
+          (s) => s.specialty_id === selectedSpecialtyId
+        )
       )
     }
     if (doctorSearch.trim()) {
       docs = docs.filter((d) =>
-        d.full_name.toLowerCase().includes(doctorSearch.toLowerCase()),
+        d.full_name.toLowerCase().includes(doctorSearch.toLowerCase())
       )
     }
     return docs
   }, [allDoctors, selectedSpecialtyId, doctorSearch])
+
+  const availableDoctorCount = React.useMemo(
+    () => filteredDoctors.filter((doc) => !isDoctorUnavailable(doc)).length,
+    [filteredDoctors]
+  )
+
+  const doctorAvailabilityLabel =
+    availableDoctorCount === 1
+      ? "available"
+      : `${availableDoctorCount} available`
+
+  const doctorAvailabilitySummary =
+    filteredDoctors.length === 0
+      ? "No doctors available"
+      : `${filteredDoctors.length} doctor${
+          filteredDoctors.length !== 1 ? "s" : ""
+        } · ${doctorAvailabilityLabel}`
+
+  const doctorAvailabilityHelper =
+    availableDoctorCount === 0
+      ? "No available doctors for the current filters. Try another specialty or search."
+      : "Select an available doctor to continue."
+
+  const showUnavailableDoctorHint =
+    filteredDoctors.length > 0 && availableDoctorCount === 0
+
+  React.useEffect(() => {
+    const channel = supabaseBrowserClient
+      .channel("doctor-availability")
+      .on("broadcast", { event: "availability_changed" }, () => {
+        void refreshDoctors()
+      })
+      .subscribe()
+
+    return () => {
+      void supabaseBrowserClient.removeChannel(channel)
+    }
+  }, [refreshDoctors])
 
   // ── Fetch slots when doctor + date changes
   React.useEffect(() => {
@@ -144,9 +232,7 @@ export default function BookAppointmentPage() {
 
     // Auto-set specialty: prefer the filtered specialty, else first linked specialty
     const sid =
-      selectedSpecialtyId ??
-      doc.doctor_specialties?.[0]?.specialty_id ??
-      ""
+      selectedSpecialtyId ?? doc.doctor_specialties?.[0]?.specialty_id ?? ""
     setSpecialtyId(sid)
 
     // Fetch available days for this doctor
@@ -169,7 +255,12 @@ export default function BookAppointmentPage() {
   const canNext = () => {
     if (step === 0) return !!doctorId
     if (step === 1) return !!date && !!slot
-    if (step === 2) return !!patientName && !!contactPhone && (bookingFor === "self" ? !!xNumber : !!dependentName)
+    if (step === 2)
+      return (
+        !!patientName &&
+        !!contactPhone &&
+        (bookingFor === "self" ? !!xNumber : !!dependentName)
+      )
     return true
   }
 
@@ -185,7 +276,8 @@ export default function BookAppointmentPage() {
       x_number: xNumber || null,
       company_number: companyNumber || null,
       dependent_name: bookingFor === "dependent" ? dependentName : null,
-      dependent_x_number: bookingFor === "dependent" ? dependentXNumber || null : null,
+      dependent_x_number:
+        bookingFor === "dependent" ? dependentXNumber || null : null,
       contact_phone: contactPhone,
       doctor_id: doctorId,
       specialty_id: specialtyId || null,
@@ -212,12 +304,23 @@ export default function BookAppointmentPage() {
   }
 
   const reset = () => {
-    setSuccess(false); setStep(0); setDir(1)
-    setDoctorId(""); setSpecialtyId(""); setSelectedSpecialtyId(null)
-    setDoctorSearch(""); setDate(""); setSlot("")
-    setPatientName(""); setXNumber(""); setCompanyNumber("")
-    setDependentName(""); setDependentXNumber(""); setContactPhone("")
-    setNotes(""); setBookingFor("self")
+    setSuccess(false)
+    setStep(0)
+    setDir(1)
+    setDoctorId("")
+    setSpecialtyId("")
+    setSelectedSpecialtyId(null)
+    setDoctorSearch("")
+    setDate("")
+    setSlot("")
+    setPatientName("")
+    setXNumber("")
+    setCompanyNumber("")
+    setDependentName("")
+    setDependentXNumber("")
+    setContactPhone("")
+    setNotes("")
+    setBookingFor("self")
   }
 
   // ── Success screen ──────────────────────────────────────────────────────────
@@ -237,7 +340,10 @@ export default function BookAppointmentPage() {
         </p>
         <div className="flex gap-3">
           <Button onClick={reset}>Book another</Button>
-          <Button variant="outline" onClick={() => (window.location.href = "/client")}>
+          <Button
+            variant="outline"
+            onClick={() => (window.location.href = "/client")}
+          >
             My appointments
           </Button>
         </div>
@@ -246,10 +352,12 @@ export default function BookAppointmentPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 w-full">
+    <div className="flex w-full flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold">Book an Appointment</h1>
-        <p className="text-sm text-muted-foreground">Follow the steps to schedule your visit.</p>
+        <p className="text-sm text-muted-foreground">
+          Follow the steps to schedule your visit.
+        </p>
       </div>
 
       {/* Step indicators */}
@@ -260,17 +368,26 @@ export default function BookAppointmentPage() {
               <div
                 className={cn(
                   "flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors",
-                  i < step ? "bg-primary text-primary-foreground"
-                    : i === step ? "border-2 border-primary text-primary"
-                    : "border-2 border-muted text-muted-foreground",
+                  i < step
+                    ? "bg-primary text-primary-foreground"
+                    : i === step
+                      ? "border-2 border-primary text-primary"
+                      : "border-2 border-muted text-muted-foreground"
                 )}
               >
                 {i < step ? <CheckCircle className="h-4 w-4" /> : i + 1}
               </div>
-              <span className="hidden text-xs text-muted-foreground sm:block">{label}</span>
+              <span className="hidden text-xs text-muted-foreground sm:block">
+                {label}
+              </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={cn("mb-4 h-px flex-1 transition-colors", i < step ? "bg-primary" : "bg-muted")} />
+              <div
+                className={cn(
+                  "mb-4 h-px flex-1 transition-colors",
+                  i < step ? "bg-primary" : "bg-muted"
+                )}
+              />
             )}
           </React.Fragment>
         ))}
@@ -279,15 +396,36 @@ export default function BookAppointmentPage() {
       {/* Step content */}
       <div className="overflow-hidden rounded-xl border bg-background p-6 shadow-sm">
         <AnimatePresence mode="wait" custom={dir}>
-
           {/* ── Step 0: Doctor & Specialty ── */}
           {step === 0 && (
-            <motion.div key="step0" custom={dir} variants={slide} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-4">
+            <motion.div
+              key="step0"
+              custom={dir}
+              variants={slide}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-4"
+            >
               <h2 className="font-semibold">Who would you like to see?</h2>
+
+              {/* Refresh button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleRefreshDoctors}
+                  disabled={refreshing}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
+                >
+                  <Loader2
+                    className={cn("h-3 w-3", refreshing && "animate-spin")}
+                  />
+                  {refreshing ? "Refreshing..." : "Refresh list"}
+                </button>
+              </div>
 
               {/* Search by name */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Search doctor by name…"
@@ -299,12 +437,12 @@ export default function BookAppointmentPage() {
                     // Clear specialty filter when user starts typing
                     if (val.length === 1) setSelectedSpecialtyId(null)
                   }}
-                  className="w-full rounded-lg border bg-muted/40 py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border bg-muted/40 py-2 pr-4 pl-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
                 />
                 {doctorSearch && (
                   <button
                     onClick={() => setDoctorSearch("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -313,22 +451,27 @@ export default function BookAppointmentPage() {
 
               {/* Specialty filter */}
               <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Filter by specialty
                 </p>
                 {dataLoading ? (
                   <div className="flex flex-wrap gap-2">
-                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-7 w-24 rounded-full" />)}
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="h-7 w-24 rounded-full" />
+                    ))}
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => { setSelectedSpecialtyId(null); setDoctorId("") }}
+                      onClick={() => {
+                        setSelectedSpecialtyId(null)
+                        setDoctorId("")
+                      }}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                         !selectedSpecialtyId
                           ? "border-primary bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:border-primary/40",
+                          : "text-muted-foreground hover:border-primary/40"
                       )}
                     >
                       All
@@ -336,12 +479,15 @@ export default function BookAppointmentPage() {
                     {specialties.map((s) => (
                       <button
                         key={s.id}
-                        onClick={() => { setSelectedSpecialtyId(s.id); setDoctorId("") }}
+                        onClick={() => {
+                          setSelectedSpecialtyId(s.id)
+                          setDoctorId("")
+                        }}
                         className={cn(
                           "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                           selectedSpecialtyId === s.id
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "text-muted-foreground hover:border-primary/40",
+                            : "text-muted-foreground hover:border-primary/40"
                         )}
                       >
                         {s.name}
@@ -353,39 +499,72 @@ export default function BookAppointmentPage() {
 
               {/* Doctor list */}
               <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  {filteredDoctors.length} doctor{filteredDoctors.length !== 1 ? "s" : ""} available
+                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {doctorAvailabilitySummary}
                 </p>
+                <p className="mb-2 text-xs text-muted-foreground">
+                  {doctorAvailabilityHelper}
+                </p>
+                {showUnavailableDoctorHint && (
+                  <p className="mb-2 text-xs font-medium text-red-500">
+                    All matching doctors are currently unavailable.
+                  </p>
+                )}
+                {filteredDoctors.length > 0 && availableDoctorCount > 0 && (
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Unavailable doctors are shown but disabled.
+                  </p>
+                )}
                 {dataLoading ? (
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                    {[...Array(4)].map((_, i) => (
+                      <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                    ))}
                   </div>
                 ) : filteredDoctors.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No doctors found matching your search.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No doctors found matching your search.
+                  </p>
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {filteredDoctors.map((doc) => {
                       const docSpecialties = specialties.filter((s) =>
-                        doc.doctor_specialties?.some((ds) => ds.specialty_id === s.id),
+                        doc.doctor_specialties?.some(
+                          (ds) => ds.specialty_id === s.id
+                        )
                       )
+                      const isUnavailable = isDoctorUnavailable(doc)
                       return (
                         <button
                           key={doc.id}
-                          onClick={() => selectDoctor(doc)}
+                          onClick={() => !isUnavailable && selectDoctor(doc)}
+                          disabled={isUnavailable}
                           className={cn(
                             "flex items-center justify-between rounded-lg border p-3 text-left transition-colors",
                             doctorId === doc.id
                               ? "border-primary bg-primary/5"
-                              : "hover:border-primary/40 hover:bg-muted/40",
+                              : isUnavailable
+                                ? "cursor-not-allowed bg-muted/30 opacity-50"
+                                : "hover:border-primary/40 hover:bg-muted/40"
                           )}
                         >
                           <div>
-                            <p className={cn("text-sm font-medium", doctorId === doc.id && "text-primary")}>
+                            <p
+                              className={cn(
+                                "text-sm font-medium",
+                                doctorId === doc.id && "text-primary"
+                              )}
+                            >
                               {doc.full_name}
                             </p>
                             {docSpecialties.length > 0 && (
                               <p className="mt-0.5 text-xs text-muted-foreground">
                                 {docSpecialties.map((s) => s.name).join(", ")}
+                              </p>
+                            )}
+                            {isUnavailable && (
+                              <p className="mt-0.5 text-xs font-medium text-red-500">
+                                Unavailable
                               </p>
                             )}
                           </div>
@@ -403,11 +582,22 @@ export default function BookAppointmentPage() {
 
           {/* ── Step 1: Date & Time ── */}
           {step === 1 && (
-            <motion.div key="step1" custom={dir} variants={slide} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-3">
+            <motion.div
+              key="step1"
+              custom={dir}
+              variants={slide}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-3"
+            >
               <div>
                 <h2 className="font-semibold">Choose a date and time</h2>
                 <p className="text-sm text-muted-foreground">
-                  Booking with <span className="font-medium">{selectedDoctor?.full_name}</span>
+                  Booking with{" "}
+                  <span className="font-medium">
+                    {selectedDoctor?.full_name}
+                  </span>
                   {selectedSpecialty && <> · {selectedSpecialty.name}</>}
                 </p>
               </div>
@@ -426,7 +616,15 @@ export default function BookAppointmentPage() {
 
           {/* ── Step 2: Details ── */}
           {step === 2 && (
-            <motion.div key="step2" custom={dir} variants={slide} initial="hidden" animate="visible" exit="exit" className="flex flex-col gap-4">
+            <motion.div
+              key="step2"
+              custom={dir}
+              variants={slide}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex flex-col gap-4"
+            >
               <h2 className="font-semibold">Appointment details</h2>
 
               <div className="grid grid-cols-2 gap-2">
@@ -438,7 +636,7 @@ export default function BookAppointmentPage() {
                       "rounded-lg border px-4 py-2 text-sm font-medium transition-colors",
                       bookingFor === opt
                         ? "border-primary bg-primary/5 text-primary"
-                        : "text-muted-foreground hover:border-primary/40",
+                        : "text-muted-foreground hover:border-primary/40"
                     )}
                   >
                     {opt === "self" ? "For myself" : "For a dependant"}
@@ -448,13 +646,16 @@ export default function BookAppointmentPage() {
 
               {/* For myself — show pre-filled read-only card */}
               {bookingFor === "self" && (
-                <div className="rounded-lg border bg-muted/20 divide-y text-sm">
+                <div className="divide-y rounded-lg border bg-muted/20 text-sm">
                   <ReadOnlyRow label="Full name" value={patientName} />
                   <ReadOnlyRow label="X-number" value={xNumber} />
-                  {companyNumber && <ReadOnlyRow label="Company number" value={companyNumber} />}
+                  {companyNumber && (
+                    <ReadOnlyRow label="Company number" value={companyNumber} />
+                  )}
                   <ReadOnlyRow label="Contact phone" value={contactPhone} />
                   <p className="px-4 py-2 text-xs text-muted-foreground">
-                    Your details are pre-filled from your profile. To update them, contact reception.
+                    Your details are pre-filled from your profile. To update
+                    them, contact reception.
                   </p>
                 </div>
               )}
@@ -462,9 +663,26 @@ export default function BookAppointmentPage() {
               {/* For dependant — editable fields */}
               {bookingFor === "dependent" && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field label="Dependant's full name *" value={dependentName} onChange={setDependentName} placeholder="Full name" />
-                  <Field label="Dependant's X-number" value={dependentXNumber} onChange={setDependentXNumber} placeholder="X12345/26" />
-                  <Field label="Contact phone *" value={contactPhone} onChange={setContactPhone} placeholder="+233..." type="tel" className="sm:col-span-2" />
+                  <Field
+                    label="Dependant's full name *"
+                    value={dependentName}
+                    onChange={setDependentName}
+                    placeholder="Full name"
+                  />
+                  <Field
+                    label="Dependant's X-number"
+                    value={dependentXNumber}
+                    onChange={setDependentXNumber}
+                    placeholder="X12345/26"
+                  />
+                  <Field
+                    label="Contact phone *"
+                    value={contactPhone}
+                    onChange={setContactPhone}
+                    placeholder="+233..."
+                    type="tel"
+                    className="sm:col-span-2"
+                  />
                 </div>
               )}
 
@@ -475,7 +693,7 @@ export default function BookAppointmentPage() {
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
                   placeholder="Any additional information for the doctor…"
-                  className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
                 />
               </div>
             </motion.div>
@@ -496,27 +714,36 @@ export default function BookAppointmentPage() {
 
               {/* Doctor summary card */}
               <div className="flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-lg">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-lg font-bold text-primary">
                   {selectedDoctor?.full_name?.charAt(0) ?? "D"}
                 </div>
                 <div>
-                  <p className="font-semibold text-foreground">{selectedDoctor?.full_name}</p>
-                  <p className="text-sm text-muted-foreground">{selectedSpecialty?.name ?? "General Practice"}</p>
+                  <p className="font-semibold text-foreground">
+                    {selectedDoctor?.full_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedSpecialty?.name ?? "General Practice"}
+                  </p>
                 </div>
               </div>
 
               {/* Date/time highlight */}
               <div className="text-center">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Your Appointment</p>
+                <p className="mb-2 text-xs tracking-wide text-muted-foreground uppercase">
+                  Your Appointment
+                </p>
                 <div className="rounded-lg border border-primary/20 bg-primary/10 p-4">
                   <p className="text-lg font-semibold text-foreground">
                     {date
-                      ? new Date(date + "T00:00:00").toLocaleDateString(undefined, {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })
+                      ? new Date(date + "T00:00:00").toLocaleDateString(
+                          undefined,
+                          {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                          }
+                        )
                       : "—"}
                   </p>
                   <p className="text-2xl font-bold text-primary">{slot}</p>
@@ -525,10 +752,26 @@ export default function BookAppointmentPage() {
 
               {/* Details list */}
               <div className="divide-y rounded-lg border text-sm">
-                <Row label="Patient" value={bookingFor === "dependent" ? dependentName : patientName} />
-                {bookingFor === "dependent" && <Row label="Booked by" value={patientName} />}
-                <Row label="X-number" value={bookingFor === "dependent" ? dependentXNumber || xNumber : xNumber} />
-                {companyNumber && <Row label="Company number" value={companyNumber} />}
+                <Row
+                  label="Patient"
+                  value={
+                    bookingFor === "dependent" ? dependentName : patientName
+                  }
+                />
+                {bookingFor === "dependent" && (
+                  <Row label="Booked by" value={patientName} />
+                )}
+                <Row
+                  label="X-number"
+                  value={
+                    bookingFor === "dependent"
+                      ? dependentXNumber || xNumber
+                      : xNumber
+                  }
+                />
+                {companyNumber && (
+                  <Row label="Company number" value={companyNumber} />
+                )}
                 <Row label="Contact phone" value={contactPhone} />
                 {notes && <Row label="Notes" value={notes} />}
               </div>
@@ -541,16 +784,28 @@ export default function BookAppointmentPage() {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSubmit}
                 disabled={loading}
-                className="relative w-full overflow-hidden rounded-lg border bg-primary py-3 font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed group cursor-pointer"
+                className="group relative w-full cursor-pointer overflow-hidden rounded-lg border bg-primary py-3 font-semibold text-primary-foreground transition-all duration-300 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   {loading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Booking…</>
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Booking…
+                    </>
                   ) : (
                     <>
                       CONFIRM APPOINTMENT
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     </>
                   )}
@@ -560,17 +815,25 @@ export default function BookAppointmentPage() {
               </motion.button>
             </motion.div>
           )}
-
         </AnimatePresence>
       </div>
 
       {/* Navigation */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={() => go(step - 1)} disabled={step === 0} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => go(step - 1)}
+          disabled={step === 0}
+          className="gap-2"
+        >
           <ChevronLeft className="h-4 w-4" /> Back
         </Button>
         {step < STEPS.length - 1 && (
-          <Button onClick={() => go(step + 1)} disabled={!canNext()} className="gap-2">
+          <Button
+            onClick={() => go(step + 1)}
+            disabled={!canNext()}
+            className="gap-2"
+          >
             Next <ChevronRight className="h-4 w-4" />
           </Button>
         )}
@@ -582,10 +845,19 @@ export default function BookAppointmentPage() {
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
 function Field({
-  label, value, onChange, placeholder, type = "text", className,
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  className,
 }: {
-  label: string; value: string; onChange: (v: string) => void
-  placeholder?: string; type?: string; className?: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: string
+  className?: string
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -595,7 +867,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        className="rounded-lg border bg-muted/40 px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
       />
     </div>
   )
@@ -611,11 +883,19 @@ function Row({ label, value }: { label: string; value?: string | null }) {
   )
 }
 
-function ReadOnlyRow({ label, value }: { label: string; value?: string | null }) {
+function ReadOnlyRow({
+  label,
+  value,
+}: {
+  label: string
+  value?: string | null
+}) {
   return (
     <div className="flex items-center justify-between px-4 py-2.5">
       <span className="text-muted-foreground">{label}</span>
-      <span className={cn("font-medium", !value && "italic text-muted-foreground")}>
+      <span
+        className={cn("font-medium", !value && "text-muted-foreground italic")}
+      >
         {value || "Not on file"}
       </span>
     </div>

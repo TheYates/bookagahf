@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RescheduleDialog } from "@/components/reschedule-dialog"
 import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
+import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 type Appointment = {
   id: string
@@ -30,7 +32,14 @@ const STATUS_STYLES: Record<string, string> = {
   review: "bg-blue-100 text-blue-700",
 }
 
-const STATUSES = ["all", "scheduled", "rescheduled", "completed", "review", "cancelled"] as const
+const STATUSES = [
+  "all",
+  "scheduled",
+  "rescheduled",
+  "completed",
+  "review",
+  "cancelled",
+] as const
 type Filter = (typeof STATUSES)[number]
 
 export default function ClientAppointmentsPage() {
@@ -41,7 +50,8 @@ export default function ClientAppointmentsPage() {
   const [error, setError] = React.useState<string | null>(null)
 
   // Reschedule dialog state
-  const [rescheduleAppt, setRescheduleAppt] = React.useState<Appointment | null>(null)
+  const [rescheduleAppt, setRescheduleAppt] =
+    React.useState<Appointment | null>(null)
   const [actionId, setActionId] = React.useState<string | null>(null)
 
   const fetchAppointments = React.useCallback(() => {
@@ -52,13 +62,65 @@ export default function ClientAppointmentsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Realtime: refresh appointments when anything changes
-  useRealtimeTable({
-    table: "appointments",
-    onchange: () => void fetchAppointments(),
-  })
+  // Realtime: refresh appointments when anything changes + show toasts
+  React.useEffect(() => {
+    const channel = supabaseBrowserClient
+      .channel("client-appointments-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        async (payload) => {
+          // Refresh the list
+          await fetchAppointments()
 
-  React.useEffect(() => { fetchAppointments() }, [fetchAppointments])
+          // Show toast notifications for status changes
+          const appt = payload.new as any
+          if (payload.eventType === "UPDATE" && appt) {
+            const oldStatus = payload.old?.status
+            const newStatus = appt.status
+
+            // Don't show toast for the client's own actions (handled locally)
+            if (oldStatus === newStatus) return
+
+            const doctorName = appt.profiles?.full_name ?? "the doctor"
+            const dateStr = new Date(appt.scheduled_at).toLocaleString(
+              undefined,
+              {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }
+            )
+
+            if (newStatus === "completed") {
+              toast.success("Appointment completed", {
+                description: `Your appointment with ${doctorName} on ${dateStr} has been marked as completed.`,
+              })
+            } else if (newStatus === "rescheduled") {
+              toast.info("Appointment rescheduled", {
+                description: `Your appointment with ${doctorName} has been rescheduled to ${dateStr}.`,
+              })
+            } else if (newStatus === "review") {
+              toast.info("Appointment marked for review", {
+                description: `${doctorName} has marked your appointment for follow-up review.`,
+              })
+            } else if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+              toast.warning("Appointment cancelled", {
+                description: `Your appointment with ${doctorName} has been cancelled.`,
+              })
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabaseBrowserClient.removeChannel(channel)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchAppointments()
+  }, [fetchAppointments])
 
   const cancel = async (id: string) => {
     setActionId(id)
@@ -69,7 +131,10 @@ export default function ClientAppointmentsPage() {
       body: JSON.stringify({ status: "cancelled" }),
     })
     setActionId(null)
-    if (!res.ok) { setError("Failed to cancel appointment"); return }
+    if (!res.ok) {
+      setError("Failed to cancel appointment")
+      return
+    }
     fetchAppointments()
   }
 
@@ -96,7 +161,9 @@ export default function ClientAppointmentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">My Appointments</h1>
-          <p className="text-sm text-muted-foreground">View, reschedule or cancel your appointments.</p>
+          <p className="text-sm text-muted-foreground">
+            View, reschedule or cancel your appointments.
+          </p>
         </div>
         <Button asChild className="gap-2">
           <Link href="/client/book">
@@ -114,12 +181,12 @@ export default function ClientAppointmentsPage() {
       {/* Search + filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             placeholder="Search doctor, specialty…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border bg-background py-2 pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-lg border bg-background py-2 pr-4 pl-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -131,7 +198,7 @@ export default function ClientAppointmentsPage() {
                 "rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors",
                 filter === s
                   ? "border-primary bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  : "text-muted-foreground hover:border-primary/40 hover:text-foreground"
               )}
             >
               {s}
@@ -144,7 +211,7 @@ export default function ClientAppointmentsPage() {
       {loading ? (
         <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium uppercase text-muted-foreground">
+            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
                 <th className="px-4 py-3">Specialty</th>
@@ -156,11 +223,21 @@ export default function ClientAppointmentsPage() {
             <tbody className="divide-y">
               {[...Array(4)].map((_, i) => (
                 <tr key={i}>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-4 w-36" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                  <td className="px-4 py-3"><Skeleton className="h-6 w-24" /></td>
+                  <td className="px-4 py-3">
+                    <Skeleton className="h-4 w-32" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Skeleton className="h-4 w-24" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Skeleton className="h-4 w-36" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <Skeleton className="h-6 w-24" />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -168,7 +245,9 @@ export default function ClientAppointmentsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-background py-14 text-center">
-          <p className="text-sm text-muted-foreground">No appointments found.</p>
+          <p className="text-sm text-muted-foreground">
+            No appointments found.
+          </p>
           <Button asChild size="sm" variant="outline">
             <Link href="/client/book">Book an appointment</Link>
           </Button>
@@ -176,11 +255,11 @@ export default function ClientAppointmentsPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
           <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium uppercase text-muted-foreground">
+            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
                 <th className="px-4 py-3">Specialty</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Date & Time</th>
+                <th className="hidden px-4 py-3 sm:table-cell">Date & Time</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Actions</th>
               </tr>
@@ -192,26 +271,38 @@ export default function ClientAppointmentsPage() {
                 return (
                   <tr key={a.id} className="hover:bg-muted/20">
                     <td className="px-4 py-3">
-                      <p className="font-medium">{a.profiles?.full_name ?? "—"}</p>
+                      <p className="font-medium">
+                        {a.profiles?.full_name ?? "—"}
+                      </p>
                       {a.dependent_name && (
-                        <p className="text-xs text-muted-foreground">For: {a.dependent_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          For: {a.dependent_name}
+                        </p>
                       )}
                       {/* Show date on mobile */}
-                      <p className="text-xs text-muted-foreground sm:hidden mt-0.5">
-                        {new Date(a.scheduled_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+                      <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                        {new Date(a.scheduled_at).toLocaleString(undefined, {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
                       </p>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {a.specialties?.name ?? "—"}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
                       {new Date(a.scheduled_at).toLocaleString(undefined, {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", STATUS_STYLES[a.status] ?? "bg-muted")}>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-medium",
+                          STATUS_STYLES[a.status] ?? "bg-muted"
+                        )}
+                      >
                         {a.status}
                       </span>
                     </td>
@@ -230,7 +321,11 @@ export default function ClientAppointmentsPage() {
                             disabled={isBusy}
                             className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                           >
-                            {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                            {isBusy ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <XCircle className="h-3 w-3" />
+                            )}
                             Cancel
                           </button>
                         </div>

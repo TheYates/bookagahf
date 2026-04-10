@@ -23,7 +23,7 @@ type NotifyParams = {
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 async function getPushSubscriptions(userId: string) {
@@ -62,28 +62,31 @@ export async function notifyAppointmentEvent(params: NotifyParams) {
   // ── Doctor message (different perspective) ───────────────────────────────
   const doctorMessage = `Patient ${patientName}'s appointment is ${status} for ${formattedDate}.`
 
-  const notifications: Promise<any>[] = []
+  const notifications: (Promise<any> | PromiseLike<any>)[] = []
 
   // ── 1. Hubtel SMS to client ───────────────────────────────────────────────
   if (contactPhone) {
     notifications.push(
       sendHubtelSms({ to: contactPhone, content: message }).catch((err) =>
-        console.error("[Hubtel SMS]", err),
-      ),
+        console.error("[Hubtel SMS]", err)
+      )
     )
   }
 
   // ── 2. In-app notification for client ────────────────────────────────────
   if (clientUserId) {
     notifications.push(
-      supabase.from("notifications").insert({
-        user_id: clientUserId,
-        appointment_id: appointmentId,
-        channel: "in-app",
-        title: header,
-        message,
-        is_read: false,
-      }),
+      supabase
+        .from("notifications")
+        .insert({
+          user_id: clientUserId,
+          appointment_id: appointmentId,
+          channel: "in-app",
+          title: header,
+          message,
+          is_read: false,
+        })
+        .then()
     )
 
     // ── 3. Web push for client ──────────────────────────────────────────────
@@ -92,12 +95,15 @@ export async function notifyAppointmentEvent(params: NotifyParams) {
         Promise.allSettled(
           subs.map((sub) =>
             sendPushNotification(
-              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              { title: header, body: message, url: "/client" },
-            ).catch((err) => console.error("[WebPush client]", err)),
-          ),
-        ),
-      ),
+              {
+                endpoint: sub.endpoint,
+                keys: { p256dh: sub.p256dh, auth: sub.auth },
+              },
+              { title: header, body: message, url: "/client" }
+            ).catch((err) => console.error("[WebPush client]", err))
+          )
+        )
+      )
     )
   }
 
@@ -111,7 +117,7 @@ export async function notifyAppointmentEvent(params: NotifyParams) {
         title: `Appointment ${status}`,
         message: doctorMessage,
         is_read: false,
-      }),
+      })
     )
 
     // ── 5. Web push for doctor ──────────────────────────────────────────────
@@ -120,12 +126,19 @@ export async function notifyAppointmentEvent(params: NotifyParams) {
         Promise.allSettled(
           subs.map((sub) =>
             sendPushNotification(
-              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              { title: `Appointment ${status}`, body: doctorMessage, url: "/doctor" },
-            ).catch((err) => console.error("[WebPush doctor]", err)),
-          ),
-        ),
-      ),
+              {
+                endpoint: sub.endpoint,
+                keys: { p256dh: sub.p256dh, auth: sub.auth },
+              },
+              {
+                title: `Appointment ${status}`,
+                body: doctorMessage,
+                url: "/doctor",
+              }
+            ).catch((err) => console.error("[WebPush doctor]", err))
+          )
+        )
+      )
     )
   }
 

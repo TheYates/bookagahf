@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js"
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 export async function GET(request: Request) {
@@ -14,12 +14,14 @@ export async function GET(request: Request) {
 
   const { data, error } = await adminClient
     .from("profiles")
-    .select(`
+    .select(
+      `
       id,
       full_name,
       doctor_settings(is_available),
       doctor_specialties(specialty_id)
-    `)
+    `
+    )
     .eq("role", "doctor")
     .eq("is_active", true)
     .order("full_name")
@@ -31,12 +33,12 @@ export async function GET(request: Request) {
   // Filter by specialty if provided
   if (specialtyId) {
     doctors = doctors.filter((d) =>
-      d.doctor_specialties?.some((s: any) => s.specialty_id === specialtyId),
+      d.doctor_specialties?.some((s: any) => s.specialty_id === specialtyId)
     )
   }
 
-  // Only return available doctors
-  doctors = doctors.filter((d) => d.doctor_settings?.[0]?.is_available !== false)
+  // Don't filter out unavailable doctors - return all so client can see they're unavailable
+  // doctors = doctors.filter((d) => d.doctor_settings?.[0]?.is_available !== false)
 
   return NextResponse.json({ doctors })
 }
