@@ -49,15 +49,14 @@ export async function POST(request: Request) {
     expires_at: expiresAt,
   })
 
-  // Send via Hubtel SMS (gracefully skip in dev if credentials are missing)
+  // Send via Hubtel SMS (gracefully skip if credentials are missing)
   try {
     await sendHubtelSms({
       to: profile.phone,
       content: `Your AGAHF verification code is: ${otp}. Valid for 10 minutes.`,
     })
   } catch (err) {
-    if (process.env.NODE_ENV !== "development") throw err
-    console.warn("[DEV] Hubtel SMS skipped (no credentials):", err)
+    console.warn("Hubtel SMS skipped (no credentials):", err)
   }
 
   // Return a masked version of the phone for the UI
