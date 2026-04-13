@@ -20,6 +20,7 @@ import { supabaseBrowserClient } from "@/lib/supabase/client"
 const NAV = [
   { href: "/doctor", label: "Dashboard", icon: LayoutDashboard },
   { href: "/doctor/appointments", label: "Appointments", icon: CalendarDays },
+  { href: "/doctor/stats", label: "Stats", icon: CalendarDays },
   { href: "/doctor/availability", label: "Availability", icon: Clock },
   { href: "/doctor/notifications", label: "Notifications", icon: Bell },
   { href: "/doctor/settings", label: "Settings", icon: Settings },
