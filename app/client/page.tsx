@@ -106,7 +106,7 @@ export default function ClientDashboardPage() {
         <>
           {/* Stat Cards */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Link href="/client/appointments" className="group">
+            <Link href="/client/book" className="group">
               <motion.div
                 whileHover={{ y: -4 }}
                 className="relative overflow-hidden rounded-2xl border p-6 shadow-sm transition-shadow group-hover:shadow-md"

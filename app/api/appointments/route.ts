@@ -6,7 +6,7 @@ import { notifyAppointmentEvent } from "@/lib/notifications/send"
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 export async function GET(request: Request) {
@@ -16,12 +16,16 @@ export async function GET(request: Request) {
 
   const supabase = await createSupabaseServerClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const role = user?.app_metadata?.role as string | undefined
 
   let query = adminClient
     .from("appointments")
-    .select("*, specialties(name), profiles!appointments_doctor_id_fkey(full_name)")
+    .select(
+      "*, specialties(name), profiles!appointments_doctor_id_fkey(full_name)"
+    )
     .order("scheduled_at", { ascending: true })
 
   if (startDate) {
@@ -61,27 +65,40 @@ export async function POST(request: Request) {
   const scheduledAt = new Date(body.scheduled_at)
   if (settings?.booking_buffer_hours) {
     const minDate = new Date(
-      Date.now() + settings.booking_buffer_hours * 60 * 60 * 1000,
+      Date.now() + settings.booking_buffer_hours * 60 * 60 * 1000
     )
     if (scheduledAt < minDate) {
       return NextResponse.json(
-        { error: `Appointments must be booked at least ${settings.booking_buffer_hours} hour(s) in advance.` },
-        { status: 400 },
+        {
+          error: `Appointments must be booked at least ${settings.booking_buffer_hours} hour(s) in advance.`,
+        },
+        { status: 400 }
       )
     }
   }
 
   // Get the current user to set created_by (required for RLS)
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const { data, error } = await supabase
     .from("appointments")
-    .insert({ ...body, status: "scheduled", created_by: user?.id ?? body.created_by })
+    .insert({
+      ...body,
+      status: "scheduled",
+      created_by: user?.id ?? body.created_by,
+    })
     .select()
     .single()
 
   if (error) {
-    console.error("[appointments POST] insert error:", error.message, error.details, error.hint)
+    console.error(
+      "[appointments POST] insert error:",
+      error.message,
+      error.details,
+      error.hint
+    )
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 

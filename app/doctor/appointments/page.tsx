@@ -9,6 +9,7 @@ import {
   Search,
   XCircle,
   Wifi,
+  User,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,6 +38,7 @@ type Appointment = {
   company_number: string | null
   doctor_id: string
   specialties: { name: string } | null
+  created_at?: string | null
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -295,168 +297,182 @@ export default function DoctorAppointmentsPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
-              <tr>
-                <th className="px-4 py-3">Patient</th>
-                <th className="hidden px-4 py-3 sm:table-cell">Date & Time</th>
-                <th className="hidden px-4 py-3 md:table-cell">Contact</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {[...Array(5)].map((_, i) => (
-                <tr key={i}>
-                  <td className="px-4 py-3">
-                    <Skeleton className="h-4 w-32" />
-                  </td>
-                  <td className="hidden px-4 py-3 sm:table-cell">
-                    <Skeleton className="h-4 w-36" />
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    <Skeleton className="h-4 w-24" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Skeleton className="h-6 w-40" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 rounded-lg border p-4"
+            >
+              <Skeleton className="h-10 w-10" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-3 w-1/4" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border bg-background py-16 text-center">
-          <CalendarDays className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No appointments found.
-          </p>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center text-muted-foreground">
+            <CalendarDays className="mx-auto mb-4 h-12 w-12 opacity-50" />
+            <p className="mb-2 text-lg font-medium">No appointments found</p>
+            <p className="text-sm">
+              Try adjusting your filters or search query.
+            </p>
+          </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-background shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground uppercase">
-              <tr>
-                <th className="px-4 py-3">Patient</th>
-                <th className="hidden px-4 py-3 sm:table-cell">Date & Time</th>
-                <th className="hidden px-4 py-3 md:table-cell">Contact</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filtered.map((a) => {
-                const isActive = ["scheduled", "rescheduled"].includes(a.status)
-                const isBusy = actionId === a.id
-                return (
-                  <tr
-                    key={a.id}
-                    className="transition-colors hover:bg-muted/20"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{a.patient_name}</p>
-                      {a.x_number && (
-                        <p className="text-xs text-muted-foreground">
-                          {a.x_number}
-                        </p>
-                      )}
-                      {a.dependent_name && (
-                        <p className="text-xs text-muted-foreground">
-                          For: {a.dependent_name}
-                        </p>
-                      )}
-                      {a.specialties?.name && (
-                        <p className="text-xs text-muted-foreground">
-                          {a.specialties.name}
-                        </p>
-                      )}
-                      {/* Show date on mobile */}
-                      <p className="mt-0.5 text-xs text-muted-foreground sm:hidden">
-                        {new Date(a.scheduled_at).toLocaleString(undefined, {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
+        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          {/* Header Row */}
+          <div className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+            <div>Patient</div>
+            <div>Status</div>
+            <div>Date</div>
+            <div>Booked On</div>
+            <div>Actions</div>
+          </div>
+
+          {/* Appointment Rows */}
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {filtered.map((a) => {
+              const isActive = ["scheduled", "rescheduled"].includes(a.status)
+              const isBusy = actionId === a.id
+              const displayId =
+                a.company_number || a.x_number || a.contact_phone || "—"
+
+              return (
+                <div
+                  key={a.id}
+                  className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] items-center gap-4 px-6 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                >
+                  {/* Patient Column */}
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
+                      <User className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {displayId}
                       </p>
-                    </td>
-                    <td className="hidden px-4 py-3 text-muted-foreground sm:table-cell">
-                      {new Date(a.scheduled_at).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
+                      <p className="truncate text-xs text-muted-foreground">
+                        {a.patient_name}
+                        {a.dependent_name && ` (For: ${a.dependent_name})`}
+                        {a.specialties?.name && ` · ${a.specialties.name}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status Column */}
+                  <div className="flex items-center">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
+                        STATUS_STYLES[a.status] ?? "bg-muted"
+                      )}
+                    >
+                      {a.status}
+                    </span>
+                    {a.notes && (
+                      <p className="mt-0.5 ml-2 line-clamp-1 max-w-[150px] text-xs text-muted-foreground italic">
+                        "{a.notes}"
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Date Column */}
+                  <div className="text-sm text-zinc-500">
+                    {new Date(a.scheduled_at).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                    <p className="text-xs text-zinc-400">
+                      {new Date(a.scheduled_at).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
                       })}
-                    </td>
-                    <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                      {a.contact_phone ?? "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          STATUS_STYLES[a.status] ?? "bg-muted"
-                        )}
-                      >
-                        {a.status}
-                      </span>
-                      {a.notes && (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground italic">
-                          "{a.notes}"
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isActive ? (
-                        <div className="flex flex-wrap gap-1">
-                          <button
-                            onClick={() =>
-                              setConfirmAction({
-                                id: a.id,
-                                status: "completed",
-                                patientName: a.patient_name,
-                              })
-                            }
-                            disabled={isBusy}
-                            className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-green-600 transition-colors hover:bg-green-50 disabled:opacity-50"
-                          >
-                            {isBusy && actionId === a.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <CheckCircle className="h-3 w-3" />
-                            )}
-                            Done
-                          </button>
-                          <button
-                            onClick={() =>
-                              setConfirmAction({
-                                id: a.id,
-                                status: "review",
-                                patientName: a.patient_name,
-                              })
-                            }
-                            disabled={isBusy}
-                            className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50"
-                          >
-                            <CalendarDays className="h-3 w-3" /> Review
-                          </button>
-                          <button
-                            onClick={() => openReschedule(a)}
-                            disabled={isBusy}
-                            className="flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-purple-600 transition-colors hover:bg-purple-50 disabled:opacity-50"
-                          >
-                            <RefreshCw className="h-3 w-3" /> Reschedule
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    </p>
+                  </div>
+
+                  {/* Booked On Column */}
+                  <div className="text-sm text-zinc-500">
+                    {a.created_at ? (
+                      <div className="flex flex-col">
+                        <span>
+                          {new Date(a.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
+                        <span className="text-xs text-zinc-400">
+                          {new Date(a.created_at).toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
+                  </div>
+
+                  {/* Actions Column */}
+                  <div className="flex items-center gap-2">
+                    {isActive ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setConfirmAction({
+                              id: a.id,
+                              status: "completed",
+                              patientName: a.patient_name,
+                            })
+                          }
+                          disabled={isBusy}
+                        >
+                          {isBusy && actionId === a.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-3 w-3" />
+                          )}
+                          Done
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs"
+                          onClick={() =>
+                            setConfirmAction({
+                              id: a.id,
+                              status: "review",
+                              patientName: a.patient_name,
+                            })
+                          }
+                          disabled={isBusy}
+                        >
+                          <CalendarDays className="h-3 w-3" /> Review
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-xs text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                          onClick={() => openReschedule(a)}
+                          disabled={isBusy}
+                        >
+                          <RefreshCw className="h-3 w-3" /> Reschedule
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

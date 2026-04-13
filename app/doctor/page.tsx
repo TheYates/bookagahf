@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Clock } from "lucide-react"
+import { User, ArrowRight, Clock } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Separator } from "@/components/ui/separator"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
@@ -52,7 +53,9 @@ const appointmentStatusLabels: Record<Status, string> = {
 const availabilityStyles = (available: boolean) =>
   cn(
     "relative flex h-8 w-14 items-center rounded-full border-2 transition-colors duration-300",
-    available ? "border-green-500 bg-green-500" : "border-muted-foreground bg-muted"
+    available
+      ? "border-green-500 bg-green-500"
+      : "border-muted-foreground bg-muted"
   )
 
 const availabilityThumbStyles = (available: boolean) =>
@@ -68,9 +71,7 @@ const availabilityMessageStyles = (available: boolean) =>
   )
 
 const availabilityMessage = (available: boolean) =>
-  available
-    ? "Accepting new appointments"
-    : "Not accepting new appointments"
+  available ? "Accepting new appointments" : "Not accepting new appointments"
 
 const availabilityDetails = (available: boolean) =>
   available
@@ -126,13 +127,13 @@ const availabilityUpdatePayload = (userId: string, next: boolean) => ({
 })
 
 const availabilityBroadcastPayload = (userId: string, next: boolean) => ({
-  type: "broadcast",
+  type: "broadcast" as const,
   event: "availability_changed",
   payload: { doctor_id: userId, is_available: next },
 })
 
 const appointmentSecondary = (appointment: TodayAppointment) =>
-  `${new Date(appointment.scheduled_at).toLocaleString()}${appointment.specialties?.name ? ` · ${appointment.specialties.name}` : ""}`
+  `${new Date(appointment.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}${appointment.specialties?.name ? ` · ${appointment.specialties.name}` : ""}`
 
 const loadingPlaceholderRows = Array.from({ length: 5 })
 
@@ -184,51 +185,95 @@ const availabilityToggleButton = (
 )
 
 const availabilityNotice = (message: { text: string; ok: boolean }) => (
-  <p className={cn("text-sm", message.ok ? "text-green-600" : "text-destructive")}>
+  <p
+    className={cn(
+      "text-sm",
+      message.ok ? "text-green-600" : "text-destructive"
+    )}
+  >
     {message.text}
   </p>
 )
 
 const appointmentsHeader = () => (
-  <div className="flex items-center justify-between border-b px-5 py-4">
+  <div className="flex items-center justify-between px-4 py-4">
     <div>
-      <h2 className="font-semibold">{appointmentTitle}</h2>
-      <p className="text-xs text-muted-foreground">{appointmentListDescription}</p>
+      <h2 className="text-lg font-semibold">{appointmentTitle}</h2>
+      <p className="text-sm text-muted-foreground">
+        {appointmentListDescription}
+      </p>
     </div>
-    <Link href={appointmentViewAllHref} className="text-sm text-primary hover:underline">
-      {appointmentViewAll}
+    <Link
+      href={appointmentViewAllHref}
+      className="flex items-center gap-1 text-sm text-primary hover:underline"
+    >
+      <span>{appointmentViewAll}</span>
+      <ArrowRight className="h-4 w-4" />
     </Link>
   </div>
 )
 
 const appointmentsLoading = () => (
-  <div className="divide-y">
-    {loadingPlaceholderRows.map((_, i) => loadingAppointmentRow(i))}
+  <div className="flex flex-col">
+    <Separator />
+    {loadingPlaceholderRows.map((_, i) => (
+      <React.Fragment key={i}>
+        <div className="grid items-center gap-4 px-4 py-5 md:grid-cols-4">
+          <div className="order-2 flex items-center gap-2 md:order-none">
+            <Skeleton className="h-14 w-16 rounded-md" />
+            <div className="flex flex-col gap-1">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+          <Skeleton className="order-1 h-5 w-20 md:order-none md:col-span-2" />
+          <Skeleton className="order-3 h-6 w-20 rounded-full md:order-none" />
+        </div>
+        <Separator />
+      </React.Fragment>
+    ))}
   </div>
 )
 
 const appointmentsEmpty = () => (
-  <p className="px-5 py-6 text-sm text-muted-foreground">{appointmentEmpty}</p>
+  <div className="flex flex-col">
+    <Separator />
+    <p className="px-4 py-6 text-sm text-muted-foreground">
+      {appointmentEmpty}
+    </p>
+    <Separator />
+  </div>
 )
 
 const appointmentRows = (loading: boolean, appts: TodayAppointment[]) => {
   if (loading) return appointmentsLoading()
   if (appts.length === 0) return appointmentsEmpty()
   return (
-    <div className="divide-y">
+    <div className="flex flex-col">
+      <Separator />
       {appts.map((appt) => (
-        <div
-          key={appt.id}
-          className="flex items-center justify-between px-5 py-3 text-sm"
-        >
-          <div>
-            <p className="font-medium">{appt.patient_name}</p>
-            <p className="text-xs text-muted-foreground">
-              {appointmentSecondary(appt)}
+        <React.Fragment key={appt.id}>
+          <div className="grid items-center gap-4 px-4 py-5 md:grid-cols-4">
+            <div className="order-2 flex items-center gap-3 md:order-none">
+              <div className="flex h-14 w-16 shrink-0 items-center justify-center rounded-md bg-muted">
+                <User className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <h3 className="font-semibold">{appt.patient_name}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {appointmentSecondary(appt)}
+                </p>
+              </div>
+            </div>
+            <p className="order-1 text-lg font-medium md:order-none md:col-span-2">
+              {appt.specialties?.name || "General"}
             </p>
+            <div className="order-3 md:order-none">
+              {renderAppointmentStatus(appt.status)}
+            </div>
           </div>
-          {renderAppointmentStatus(appt.status)}
-        </div>
+          <Separator />
+        </React.Fragment>
       ))}
     </div>
   )
@@ -256,7 +301,9 @@ const headerAvailabilityCard = (
 
 const greetingBlock = (name: string) => (
   <div>
-    <h1 className="text-2xl font-bold">{getGreeting()}, {name}!</h1>
+    <h1 className="text-2xl font-bold">
+      {getGreeting()}, {name}!
+    </h1>
     <p className="text-sm text-muted-foreground">{greetingDescription}</p>
   </div>
 )
@@ -291,14 +338,12 @@ const getGreeting = () => {
   return "Good evening"
 }
 
-
 export default function DoctorDashboardPage() {
   const [appointments, setAppointments] = React.useState<TodayAppointment[]>([])
   const [loading, setLoading] = React.useState(true)
   const [userName, setUserName] = React.useState("")
   const [isAvailable, setIsAvailable] = React.useState(true)
-  const [availabilityLoading, setAvailabilityLoading] =
-    React.useState(true)
+  const [availabilityLoading, setAvailabilityLoading] = React.useState(true)
   const [savingAvailability, setSavingAvailability] = React.useState(false)
   const [availabilityMessage, setAvailabilityMessage] = React.useState<{
     text: string
