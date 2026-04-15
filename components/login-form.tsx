@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import { User, KeyRound, Send, ArrowRight } from "lucide-react"
+import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 
@@ -160,7 +161,14 @@ export const LoginForm = React.forwardRef<HTMLDivElement, LoginFormProps>(
         // Focus credential input after it slides in
         setTimeout(() => credentialRef.current?.focus(), 300)
       } catch (err: any) {
-        setError(err?.message ?? "Failed to send OTP. Please try again.")
+        const message = err?.message ?? "Failed to send OTP. Please try again."
+        setError(message)
+        if (message.toLowerCase().includes("not found")) {
+          toast.error("Account not found", {
+            description:
+              "Please check your X-number or corporate number and try again.",
+          })
+        }
       } finally {
         setLoading(false)
       }

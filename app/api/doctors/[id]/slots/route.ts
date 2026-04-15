@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js"
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } },
+  { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
 /**
@@ -14,7 +14,7 @@ const adminClient = createClient(
  */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   const { searchParams } = new URL(request.url)
@@ -35,7 +35,8 @@ export async function GET(
     .eq("day_of_week", dayOfWeek)
     .eq("is_active", true)
 
-  if (availError) return NextResponse.json({ error: availError.message }, { status: 400 })
+  if (availError)
+    return NextResponse.json({ error: availError.message }, { status: 400 })
   if (!avail || avail.length === 0) {
     return NextResponse.json({ slots: [] })
   }
@@ -68,11 +69,12 @@ export async function GET(
     (existing ?? []).map((a) => {
       const d = new Date(a.scheduled_at)
       return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
-    }),
+    })
   )
 
   // Generate slots within availability windows using configured duration
   const slots: string[] = []
+  const bookedSlots: string[] = []
   for (const window of avail) {
     const [startH, startM] = window.start_time.split(":").map(Number)
     const [endH, endM] = window.end_time.split(":").map(Number)
@@ -93,11 +95,13 @@ export async function GET(
         !bookedTimes.has(slotLabel)
       ) {
         slots.push(slotLabel)
+      } else {
+        bookedSlots.push(slotLabel)
       }
 
       cursor = new Date(cursor.getTime() + durationMs)
     }
   }
 
-  return NextResponse.json({ slots })
+  return NextResponse.json({ slots, bookedSlots })
 }

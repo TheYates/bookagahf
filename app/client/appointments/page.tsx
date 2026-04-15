@@ -2,24 +2,29 @@
 
 import * as React from "react"
 import Link from "next/link"
-import {
-  PlusCircle,
-  Loader2,
-  Search,
-  XCircle,
-  RefreshCw,
-  Calendar,
-  Building,
-  Clock,
-  Check,
-  CircleDashed,
-} from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { MobileAppointmentsList } from "@/components/appointments/mobile-appointments-list"
 import { RescheduleDialog } from "@/components/reschedule-dialog"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import {
+  PlusCircle,
+  Search,
+  Calendar,
+  Building,
+  Clock,
+  CheckCircle2,
+  CircleDashed,
+  XCircle,
+  RefreshCw,
+  Check,
+  AlertTriangle,
+  MapPin,
+  UserX,
+} from "lucide-react"
 
 type Appointment = {
   id: string
@@ -36,24 +41,21 @@ type Appointment = {
   booked_at?: string | null
 }
 
-const STATUSES = [
-  "all",
-  "scheduled",
-  "rescheduled",
-  "completed",
-  "review",
-  "cancelled",
+const FILTERS = [
+  { value: "all", label: "All" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "past", label: "Past" },
+  { value: "completed", label: "Done" },
+  { value: "cancelled", label: "Cancelled" },
 ] as const
-type Filter = (typeof STATUSES)[number]
 
 export default function ClientAppointmentsPage() {
   const [appointments, setAppointments] = React.useState<Appointment[]>([])
   const [loading, setLoading] = React.useState(true)
-  const [filter, setFilter] = React.useState<Filter>("all")
+  const [filter, setFilter] = React.useState("all")
   const [searchQuery, setSearchQuery] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
 
-  // Reschedule dialog state
   const [rescheduleAppt, setRescheduleAppt] =
     React.useState<Appointment | null>(null)
   const [actionId, setActionId] = React.useState<string | null>(null)
@@ -67,6 +69,11 @@ export default function ClientAppointmentsPage() {
   }, [])
 
   const cancel = async (id: string) => {
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this appointment?"
+    )
+    if (!confirmCancel) return
+
     setActionId(id)
     setError(null)
     const res = await fetch(`/api/appointments/${id}`, {
@@ -88,43 +95,6 @@ export default function ClientAppointmentsPage() {
   }
   const handleCancelAppointment = (id: string) => cancel(id)
 
-  const statusConfig: Record<
-    string,
-    { icon: typeof CircleDashed; label: string; className: string }
-  > = {
-    review: {
-      icon: CircleDashed,
-      label: "Review",
-      className:
-        "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400",
-    },
-    scheduled: {
-      icon: Clock,
-      label: "Pending",
-      className:
-        "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400",
-    },
-    rescheduled: {
-      icon: RefreshCw,
-      label: "Moved",
-      className:
-        "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400",
-    },
-    completed: {
-      icon: Check,
-      label: "Done",
-      className:
-        "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400",
-    },
-    cancelled: {
-      icon: XCircle,
-      label: "Cancelled",
-      className:
-        "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400",
-    },
-  }
-
-  // Realtime: refresh appointments when anything changes + show toasts
   React.useEffect(() => {
     const channel = supabaseBrowserClient
       .channel("client-appointments-realtime")
@@ -132,16 +102,13 @@ export default function ClientAppointmentsPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
         async (payload) => {
-          // Refresh the list
           await fetchAppointments()
 
-          // Show toast notifications for status changes
           const appt = payload.new as any
           if (payload.eventType === "UPDATE" && appt) {
             const oldStatus = payload.old?.status
             const newStatus = appt.status
 
-            // Don't show toast for the client's own actions (handled locally)
             if (oldStatus === newStatus) return
 
             const doctorName = appt.profiles?.full_name ?? "the doctor"
@@ -178,7 +145,7 @@ export default function ClientAppointmentsPage() {
     return () => {
       supabaseBrowserClient.removeChannel(channel)
     }
-  }, [])
+  }, [fetchAppointments])
 
   React.useEffect(() => {
     fetchAppointments()
@@ -189,18 +156,46 @@ export default function ClientAppointmentsPage() {
     fetchAppointments()
   }
 
-  const filtered = appointments.filter((a) => {
-    const matchStatus = filter === "all" || a.status === filter
-    const q = searchQuery.toLowerCase()
-    const matchSearch =
-      !q ||
-      a.profiles?.full_name?.toLowerCase().includes(q) ||
-      a.specialties?.name?.toLowerCase().includes(q) ||
-      a.status.includes(q) ||
-      a.dependent_name?.toLowerCase().includes(q)
-    return matchStatus && matchSearch
-  })
-  const groupedAppointments = filtered.reduce(
+  const filteredAppointments = React.useMemo(() => {
+    return appointments.filter((appointment) => {
+      const appointmentDate = new Date(appointment.scheduled_at)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+
+      let matchesFilter = true
+      switch (filter) {
+        case "upcoming":
+          matchesFilter =
+            appointmentDate >= today &&
+            appointment.status !== "completed" &&
+            appointment.status !== "cancelled"
+          break
+        case "past":
+          matchesFilter = appointmentDate < today
+          break
+        case "completed":
+          matchesFilter = appointment.status === "completed"
+          break
+        case "cancelled":
+          matchesFilter = appointment.status === "cancelled"
+          break
+        default:
+          matchesFilter = true
+      }
+
+      const query = searchQuery.toLowerCase()
+      const searchMatch =
+        !query ||
+        appointment.profiles?.full_name?.toLowerCase().includes(query) ||
+        appointment.specialties?.name?.toLowerCase().includes(query) ||
+        appointment.status.includes(query) ||
+        appointment.dependent_name?.toLowerCase().includes(query)
+
+      return matchesFilter && searchMatch
+    })
+  }, [appointments, filter, searchQuery])
+
+  const groupedAppointments = filteredAppointments.reduce(
     (groups, appointment) => {
       const date = new Date(appointment.scheduled_at)
       date.setHours(0, 0, 0, 0)
@@ -231,14 +226,50 @@ export default function ClientAppointmentsPage() {
     },
     {} as Record<string, Appointment[]>
   )
+
   const groupedEntries = Object.entries(groupedAppointments).sort((a, b) => {
     const order = ["Today", "Upcoming", "Yesterday", "Last Week", "Older"]
     return order.indexOf(a[0]) - order.indexOf(b[0])
   })
 
+  const statusConfig: Record<
+    string,
+    { icon: typeof CircleDashed; label: string; className: string }
+  > = {
+    review: {
+      icon: Clock,
+      label: "Pending",
+      className:
+        "bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-400",
+    },
+    scheduled: {
+      icon: CheckCircle2,
+      label: "Confirmed",
+      className:
+        "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-400",
+    },
+    rescheduled: {
+      icon: RefreshCw,
+      label: "Moved",
+      className:
+        "bg-orange-50 border-orange-200 text-orange-700 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-400",
+    },
+    completed: {
+      icon: Check,
+      label: "Done",
+      className:
+        "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400",
+    },
+    cancelled: {
+      icon: XCircle,
+      label: "Cancelled",
+      className:
+        "bg-zinc-100 border-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400",
+    },
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">My Appointments</h1>
@@ -259,33 +290,82 @@ export default function ClientAppointmentsPage() {
         </p>
       )}
 
-      {/* Search + filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            placeholder="Search doctor, specialty…"
+      {/* Mobile Filter & Search */}
+      <div className="space-y-3 md:hidden">
+        <div className="relative">
+          <Search className="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Find appointments..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border bg-background py-2 pr-4 pl-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            className="h-12 w-full rounded-full border-zinc-200 bg-white pl-11 text-base shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {STATUSES.map((s) => (
+        <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 md:overflow-visible">
+          {FILTERS.map((f) => (
             <button
-              key={s}
-              onClick={() => setFilter(s)}
+              key={f.value}
+              onClick={() => setFilter(f.value)}
               className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors",
-                filter === s
+                "rounded-full border px-5 py-2 text-sm font-bold whitespace-nowrap shadow-sm transition-all",
+                filter === f.value
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                  : "border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop Filter & Search */}
+      <div className="hidden flex-row items-center justify-between gap-4 md:flex">
+        <div className="flex flex-wrap gap-1.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+                filter === f.value
                   ? "border-primary bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:border-primary/40 hover:text-foreground"
               )}
             >
-              {s}
+              {f.label}
             </button>
           ))}
         </div>
+        <div className="relative w-72">
+          <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search doctor or specialty..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {/* Mobile View */}
+      <div className="md:hidden">
+        <MobileAppointmentsList
+          appointments={filteredAppointments.map((a) => ({
+            id: a.id,
+            date: a.scheduled_at,
+            status: a.status,
+            doctorName: a.profiles?.full_name || undefined,
+            departmentName: a.specialties?.name || undefined,
+            notes: a.notes || undefined,
+            scheduled_at: a.scheduled_at,
+            specialties: a.specialties,
+            profiles: a.profiles,
+          }))}
+          isLoading={loading}
+          onCancel={handleCancelAppointment}
+          onReschedule={handleReschedule}
+        />
       </div>
 
       {/* Desktop View */}
@@ -295,7 +375,7 @@ export default function ClientAppointmentsPage() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="flex items-center gap-4 p-4 border rounded-lg"
+                className="flex items-center gap-4 rounded-lg border p-4"
               >
                 <Skeleton className="h-10 w-10" />
                 <div className="flex-1 space-y-2">
@@ -311,20 +391,19 @@ export default function ClientAppointmentsPage() {
               <p className="text-sm">Error: {error}</p>
             </div>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filteredAppointments.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <div className="text-center text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">No appointments found</p>
+              <Calendar className="mx-auto mb-4 h-12 w-12 opacity-50" />
+              <p className="mb-2 text-lg font-medium">No appointments found</p>
               <p className="text-sm">
                 Try adjusting your filters or search query.
               </p>
             </div>
           </div>
         ) : (
-          <div className="bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-            {/* Header Row */}
-            <div className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 border-b border-zinc-100 bg-zinc-50/50 px-6 py-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
               <div>Title</div>
               <div>Status</div>
               <div>Date</div>
@@ -332,39 +411,38 @@ export default function ClientAppointmentsPage() {
               <div>Actions</div>
             </div>
 
-            {/* Appointment Groups */}
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {groupedEntries.map(([groupName, groupAppointments]) => (
                 <div key={groupName}>
-                  <div className="px-6 py-3 bg-zinc-50/30 dark:bg-zinc-900/30 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                  <div className="bg-zinc-50/30 px-6 py-3 text-[10px] font-bold tracking-widest text-muted-foreground uppercase dark:bg-zinc-900/30">
                     {groupName}
                   </div>
                   <div>
                     {groupAppointments.map((appointment) => (
                       <div
                         key={appointment.id}
-                        className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] gap-4 px-6 py-4 items-center hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                        className="grid grid-cols-[2fr_1.25fr_1fr_1fr_1.25fr] items-center gap-4 px-6 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                       >
-                        {/* Title Column */}
                         <div className="flex items-start gap-3">
-                          <div className="h-10 w-10 text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center shrink-0">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
                             <Building className="h-5 w-5" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate">
+                            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                               {appointment.profiles?.full_name ?? "Appointment"}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="truncate text-xs text-muted-foreground">
                               {appointment.specialties?.name ?? "—"} • {""}
-                              {new Date(appointment.scheduled_at).toLocaleTimeString(
-                                undefined,
-                                { hour: "2-digit", minute: "2-digit" }
-                              )}
+                              {new Date(
+                                appointment.scheduled_at
+                              ).toLocaleTimeString("en-US", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </p>
                           </div>
                         </div>
 
-                        {/* Status Column */}
                         <div className="flex items-center">
                           {(() => {
                             const config = statusConfig[appointment.status] || {
@@ -379,36 +457,36 @@ export default function ClientAppointmentsPage() {
                             return (
                               <div
                                 className={cn(
-                                  "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-xs font-medium shadow-sm transition-colors",
+                                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium shadow-sm transition-colors",
                                   config.className
                                 )}
                               >
                                 <StatusIcon className="h-3.5 w-3.5" />
-                                <span className="capitalize">{config.label}</span>
+                                <span className="capitalize">
+                                  {config.label}
+                                </span>
                               </div>
                             )
                           })()}
                         </div>
 
-                        {/* Date Column */}
                         <div className="text-sm text-zinc-500">
-                          {new Date(appointment.scheduled_at).toLocaleDateString(
-                            "en-US",
-                            {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            }
-                          )}
+                          {new Date(
+                            appointment.scheduled_at
+                          ).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
                         </div>
 
-                        {/* Booked On Column */}
                         <div className="text-sm text-zinc-500">
                           {appointment.booked_at || appointment.created_at ? (
                             <div className="flex flex-col">
                               <span>
                                 {new Date(
-                                  appointment.booked_at ?? appointment.created_at!,
+                                  appointment.booked_at ??
+                                    appointment.created_at!
                                 ).toLocaleDateString("en-US", {
                                   month: "short",
                                   day: "numeric",
@@ -416,9 +494,10 @@ export default function ClientAppointmentsPage() {
                               </span>
                               <span className="text-xs text-zinc-400">
                                 {new Date(
-                                  appointment.booked_at ?? appointment.created_at!,
+                                  appointment.booked_at ??
+                                    appointment.created_at!
                                 ).toLocaleTimeString("en-US", {
-                                  hour: "numeric",
+                                  hour: "2-digit",
                                   minute: "2-digit",
                                 })}
                               </span>
@@ -428,9 +507,8 @@ export default function ClientAppointmentsPage() {
                           )}
                         </div>
 
-                        {/* Actions Column */}
                         <div className="flex items-center gap-2">
-                          {["scheduled", "rescheduled"].includes(
+                          {["scheduled", "rescheduled", "review"].includes(
                             appointment.status
                           ) && (
                             <>
@@ -446,13 +524,12 @@ export default function ClientAppointmentsPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => handleCancelAppointment(appointment.id)}
+                                className="h-8 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() =>
+                                  handleCancelAppointment(appointment.id)
+                                }
                                 disabled={actionId === appointment.id}
                               >
-                                {actionId === appointment.id ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : null}
                                 Cancel
                               </Button>
                             </>

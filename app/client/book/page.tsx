@@ -83,6 +83,7 @@ export default function BookAppointmentPage() {
   const [date, setDate] = React.useState("")
   const [slot, setSlot] = React.useState("")
   const [slots, setSlots] = React.useState<string[]>([])
+  const [bookedSlots, setBookedSlots] = React.useState<string[]>([])
   const [slotsLoading, setSlotsLoading] = React.useState(false)
   const [availableDays, setAvailableDays] = React.useState<
     number[] | undefined
@@ -217,10 +218,14 @@ export default function BookAppointmentPage() {
     if (!doctorId || !date) return
     setSlot("")
     setSlots([])
+    setBookedSlots([])
     setSlotsLoading(true)
     void fetch(`/api/doctors/${doctorId}/slots?date=${date}`)
       .then((r) => r.json())
-      .then((d) => setSlots(d.slots ?? []))
+      .then((d) => {
+        setSlots(d.slots ?? [])
+        setBookedSlots(d.bookedSlots ?? [])
+      })
       .finally(() => setSlotsLoading(false))
   }, [doctorId, date])
 
@@ -409,20 +414,6 @@ export default function BookAppointmentPage() {
             >
               <h2 className="font-semibold">Who would you like to see?</h2>
 
-              {/* Refresh button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={handleRefreshDoctors}
-                  disabled={refreshing}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
-                >
-                  <Loader2
-                    className={cn("h-3 w-3", refreshing && "animate-spin")}
-                  />
-                  {refreshing ? "Refreshing..." : "Refresh list"}
-                </button>
-              </div>
-
               {/* Search by name */}
               <div className="relative">
                 <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -450,71 +441,44 @@ export default function BookAppointmentPage() {
               </div>
 
               {/* Specialty filter */}
-              <div>
-                <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Filter by specialty
-                </p>
-                {dataLoading ? (
-                  <div className="flex flex-wrap gap-2">
-                    {[...Array(5)].map((_, i) => (
-                      <Skeleton key={i} className="h-7 w-24 rounded-full" />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
+              <div className="-mx-6 overflow-x-auto px-6 md:overflow-visible">
+                <div className="flex min-w-max gap-2 pb-2 md:pb-0">
+                  <button
+                    onClick={() => {
+                      setSelectedSpecialtyId(null)
+                      setDoctorId("")
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      !selectedSpecialtyId
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:border-primary/40"
+                    )}
+                  >
+                    All
+                  </button>
+                  {specialties.map((s) => (
                     <button
+                      key={s.id}
                       onClick={() => {
-                        setSelectedSpecialtyId(null)
+                        setSelectedSpecialtyId(s.id)
                         setDoctorId("")
                       }}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        !selectedSpecialtyId
+                        selectedSpecialtyId === s.id
                           ? "border-primary bg-primary text-primary-foreground"
                           : "text-muted-foreground hover:border-primary/40"
                       )}
                     >
-                      All
+                      {s.name}
                     </button>
-                    {specialties.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          setSelectedSpecialtyId(s.id)
-                          setDoctorId("")
-                        }}
-                        className={cn(
-                          "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                          selectedSpecialtyId === s.id
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "text-muted-foreground hover:border-primary/40"
-                        )}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
 
               {/* Doctor list */}
               <div>
-                <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {doctorAvailabilitySummary}
-                </p>
-                <p className="mb-2 text-xs text-muted-foreground">
-                  {doctorAvailabilityHelper}
-                </p>
-                {showUnavailableDoctorHint && (
-                  <p className="mb-2 text-xs font-medium text-red-500">
-                    All matching doctors are currently unavailable.
-                  </p>
-                )}
-                {filteredDoctors.length > 0 && availableDoctorCount > 0 && (
-                  <p className="mb-2 text-xs text-muted-foreground">
-                    Unavailable doctors are shown but disabled.
-                  </p>
-                )}
                 {dataLoading ? (
                   <div className="grid gap-2 sm:grid-cols-2">
                     {[...Array(4)].map((_, i) => (
@@ -595,7 +559,7 @@ export default function BookAppointmentPage() {
                 <h2 className="font-semibold">Choose a date and time</h2>
                 <p className="text-sm text-muted-foreground">
                   Booking with{" "}
-                  <span className="font-medium">
+                  <span className="text-md font-semibold text-primary">
                     {selectedDoctor?.full_name}
                   </span>
                   {selectedSpecialty && <> · {selectedSpecialty.name}</>}
@@ -603,6 +567,7 @@ export default function BookAppointmentPage() {
               </div>
               <DateTimePicker
                 slots={slots}
+                bookedSlots={bookedSlots}
                 slotsLoading={slotsLoading}
                 date={date}
                 slot={slot}
@@ -653,10 +618,10 @@ export default function BookAppointmentPage() {
                     <ReadOnlyRow label="Company number" value={companyNumber} />
                   )}
                   <ReadOnlyRow label="Contact phone" value={contactPhone} />
-                  <p className="px-4 py-2 text-xs text-muted-foreground">
+                  {/* <p className="px-4 py-2 text-xs text-muted-foreground">
                     Your details are pre-filled from your profile. To update
                     them, contact reception.
-                  </p>
+                  </p> */}
                 </div>
               )}
 

@@ -56,7 +56,9 @@ export async function POST(request: Request) {
       content: `Your AGAHF verification code is: ${otp}. Valid for 10 minutes.`,
     })
   } catch (err) {
-    console.warn("Hubtel SMS skipped (no credentials):", err)
+    if (process.env.NODE_ENV === "development") {
+      console.warn("Hubtel SMS skipped (no credentials):", err)
+    }
   }
 
   // Return a masked version of the phone for the UI

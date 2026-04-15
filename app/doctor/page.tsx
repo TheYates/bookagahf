@@ -133,7 +133,7 @@ const availabilityBroadcastPayload = (userId: string, next: boolean) => ({
 })
 
 const appointmentSecondary = (appointment: TodayAppointment) =>
-  `${new Date(appointment.scheduled_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}${appointment.specialties?.name ? ` · ${appointment.specialties.name}` : ""}`
+  `${new Date(appointment.scheduled_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}${appointment.specialties?.name ? ` · ${appointment.specialties.name}` : ""}`
 
 const loadingPlaceholderRows = Array.from({ length: 5 })
 

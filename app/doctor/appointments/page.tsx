@@ -388,7 +388,7 @@ export default function DoctorAppointmentsPage() {
                     })}
                     <p className="text-xs text-zinc-400">
                       {new Date(a.scheduled_at).toLocaleTimeString("en-US", {
-                        hour: "numeric",
+                        hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </p>
@@ -406,7 +406,7 @@ export default function DoctorAppointmentsPage() {
                         </span>
                         <span className="text-xs text-zinc-400">
                           {new Date(a.created_at).toLocaleTimeString("en-US", {
-                            hour: "numeric",
+                            hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </span>

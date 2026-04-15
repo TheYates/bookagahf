@@ -174,8 +174,8 @@ export default function ClientDashboardPage() {
                     <p className="mb-2 text-3xl font-bold">
                       {new Date(
                         nextAppointment.scheduled_at
-                      ).toLocaleTimeString(undefined, {
-                        hour: "numeric",
+                      ).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </p>

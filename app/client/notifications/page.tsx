@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { Bell, CheckCheck, Loader2 } from "lucide-react"
+import { Bell, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { supabaseBrowserClient } from "@/lib/supabase/client"
 import { useRealtimeTable } from "@/lib/hooks/use-realtime-table"
 
@@ -20,7 +21,9 @@ export default function NotificationsPage() {
   const [loading, setLoading] = React.useState(true)
 
   const fetchNotifications = async () => {
-    const { data: { user } } = await supabaseBrowserClient.auth.getUser()
+    const {
+      data: { user },
+    } = await supabaseBrowserClient.auth.getUser()
     if (!user) return
 
     const { data } = await supabaseBrowserClient
@@ -43,7 +46,9 @@ export default function NotificationsPage() {
   }, [])
 
   const markAllRead = async () => {
-    const { data: { user } } = await supabaseBrowserClient.auth.getUser()
+    const {
+      data: { user },
+    } = await supabaseBrowserClient.auth.getUser()
     if (!user) return
 
     await supabaseBrowserClient
@@ -62,7 +67,7 @@ export default function NotificationsPage() {
       .eq("id", id)
 
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     )
   }
 
@@ -78,15 +83,32 @@ export default function NotificationsPage() {
           </p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllRead} className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={markAllRead}
+            className="gap-2"
+          >
             <CheckCheck className="h-4 w-4" /> Mark all read
           </Button>
         )}
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        <div className="flex flex-col gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3 rounded-xl border bg-background p-4 shadow-sm"
+            >
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-2 w-1/4" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : notifications.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border bg-background py-16 text-center">
@@ -106,7 +128,9 @@ export default function NotificationsPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold">{n.title}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{n.message}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {n.message}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {new Date(n.created_at).toLocaleString(undefined, {
                       dateStyle: "medium",
