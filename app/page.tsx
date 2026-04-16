@@ -65,12 +65,12 @@ export default function HomePage() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error ?? "Failed to send OTP")
 
-    // In dev mode, show the OTP in a toast for easy testing
+    // In dev mode or mock mode, show the OTP in a toast for easy testing
     if (data.devOtp) {
       toast.info(`[DEV] Your OTP is: ${data.devOtp}`, {
         duration: 20000,
         description:
-          "Valid for 10 minutes. This toast only appears in development mode.",
+          "Valid for 10 minutes. This toast only appears in dev/mock mode.",
       })
     }
 
