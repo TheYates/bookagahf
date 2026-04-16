@@ -67,12 +67,13 @@ export async function POST(request: Request) {
     "*".repeat(Math.max(0, profile.phone.length - 5)) +
     profile.phone.slice(-2)
 
-  // In development, return the OTP in the response for easy testing
+  // In development or mock mode, return the OTP in the response for easy testing
   const isDev = process.env.NODE_ENV === "development"
+  const isMockMode = process.env.MOCK_OTP === "true"
 
   return NextResponse.json({
     message: "OTP sent successfully",
     maskedPhone: masked,
-    ...(isDev && { devOtp: otp }),
+    ...((isDev || isMockMode) && { devOtp: otp }),
   })
 }
