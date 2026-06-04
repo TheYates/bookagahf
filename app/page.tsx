@@ -129,13 +129,10 @@ export default function HomePage() {
       throw new Error(data.error ?? "Invalid OTP")
     }
 
-    // Navigate to the magic link action URL — Supabase sets the session via redirect
-    if (data.actionLink) {
-      window.location.href = data.actionLink
-      return
-    }
-
-    router.push("/client")
+    const role = (data.role as string) ?? "client"
+    if (role === "admin") window.location.replace("/admin")
+    else if (role === "doctor") window.location.replace("/doctor")
+    else window.location.replace("/client")
   }
 
   return (

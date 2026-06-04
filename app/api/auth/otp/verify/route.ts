@@ -1,20 +1,21 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { createServerClient } from "@supabase/ssr"
 
 // Admin client — for DB queries and user management (bypasses RLS)
 const adminClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  { auth: { autoRefreshToken: false, persistSession: false } },
 )
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { identifier, otp, type } = await request.json()
 
   if (!identifier || !otp) {
     return NextResponse.json(
       { error: "Identifier and OTP are required" },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
   if (tokenError || !token) {
     return NextResponse.json(
       { error: "No OTP found. Please request a new one." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     if (new Date(token.expires_at) < new Date()) {
       return NextResponse.json(
         { error: "OTP has expired. Please request a new one." },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -70,12 +71,9 @@ export async function POST(request: Request) {
     await adminClient.from("otp_tokens").delete().eq("profile_id", profile.id)
   }
 
-  // Generate a magic link and return the action_link for the browser to follow
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-
   // Get the internal auth email from the auth user (not the contact email in profiles)
   const { data: authUser } = await adminClient.auth.admin.getUserById(
-    profile.id
+    profile.id,
   )
   const authEmail = authUser?.user?.email ?? profile.email
 
@@ -83,21 +81,52 @@ export async function POST(request: Request) {
     await adminClient.auth.admin.generateLink({
       type: "magiclink",
       email: authEmail,
-      options: { redirectTo: `${appUrl}/auth/callback?redirect_to=/client` },
     })
 
-  if (linkError || !linkData?.properties?.action_link) {
+  const tokenHash = linkData?.properties?.hashed_token
+
+  if (linkError || !tokenHash) {
     console.error("[OTP verify] generateLink error:", linkError)
     return NextResponse.json(
-      { error: "Failed to create session link" },
-      { status: 500 }
+      { error: "Failed to create session" },
+      { status: 500 },
     )
   }
 
-  // Return the full action link — browser will navigate to it to get a real session
-  return NextResponse.json({
+  const response = NextResponse.json({
     success: true,
     role: profile.role,
-    actionLink: linkData.properties.action_link,
   })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    },
+  )
+
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    type: "magiclink",
+    token_hash: tokenHash,
+  })
+
+  if (verifyError) {
+    console.error("[OTP verify] verifyOtp error:", verifyError)
+    return NextResponse.json(
+      { error: verifyError.message ?? "Failed to establish session" },
+      { status: 500 },
+    )
+  }
+
+  return response
 }
