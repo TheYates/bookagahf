@@ -133,6 +133,18 @@ create table if not exists public.push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.health_check_logs (
+  id uuid primary key default gen_random_uuid(),
+  check_type text not null check (check_type in ('daily_health', 'supabase_keepalive')),
+  status text not null check (status in ('ok', 'error')),
+  response_ms int,
+  message text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists health_check_logs_created_at_idx
+  on public.health_check_logs (created_at desc);
+
 create or replace function public.has_role(role_name text)
 returns boolean
 language sql
@@ -151,6 +163,7 @@ alter table public.appointments enable row level security;
 alter table public.notifications enable row level security;
 alter table public.settings enable row level security;
 alter table public.push_subscriptions enable row level security;
+alter table public.health_check_logs enable row level security;
 
 create policy "Profiles are viewable by owner" on public.profiles
   for select using (auth.uid() = id or public.has_role('admin'));
@@ -197,3 +210,6 @@ create policy "Settings update by admin" on public.settings
 
 create policy "Push subscriptions by owner" on public.push_subscriptions
   for all using (auth.uid() = user_id or public.has_role('admin'));
+
+create policy "Health logs readable by admin" on public.health_check_logs
+  for select using (public.has_role('admin'));

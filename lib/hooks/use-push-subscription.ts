@@ -75,6 +75,8 @@ export function usePushSubscription() {
   // Check current subscription status
   React.useEffect(() => {
     if (!isSupported) return
+    // Only check when a service worker is actively controlling the page
+    if (!navigator.serviceWorker.controller) return
     navigator.serviceWorker.ready.then((reg) =>
       reg.pushManager.getSubscription().then((sub) => setIsSubscribed(!!sub)),
     )

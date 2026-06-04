@@ -10,7 +10,7 @@ export function PushPrompt() {
     usePushSubscription()
   const [dismissed, setDismissed] = React.useState(false)
 
-  if (!isSupported || isSubscribed || dismissed) return null
+  if (process.env.NODE_ENV !== "production" || !isSupported || isSubscribed || dismissed) return null
 
   return (
     <div className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-xl border bg-background p-4 shadow-lg">

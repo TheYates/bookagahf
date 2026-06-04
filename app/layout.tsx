@@ -63,7 +63,7 @@ export default function RootLayout({
         <ThemeProvider>
           <ServiceWorkerRegister />
           {children}
-          <PushPrompt />
+          {process.env.NODE_ENV === "production" && <PushPrompt />}
           <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
