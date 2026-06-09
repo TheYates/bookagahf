@@ -12,6 +12,7 @@ import {
   Stethoscope,
   Settings,
   Activity,
+  Database,
   LogOut,
   Menu,
   X,
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/health", label: "System Health", icon: Activity },
+  { href: "/admin/databases", label: "Database", icon: Database },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
