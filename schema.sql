@@ -5,6 +5,9 @@ create extension if not exists "pgcrypto";
 create type if not exists public.client_category as enum (
   'private_cash',
   'private_sponsored',
+  'private_dependent',
+  'junior_staff_dependent',
+  'senior_staff_dependent',
   'nhis',
   'corporate',
   'other'
@@ -22,6 +25,9 @@ create table if not exists public.profiles (
   category public.client_category,
   emergency_contact_name text,
   emergency_contact_phone text,
+  sex text,
+  date_of_birth text,
+  date_joined text,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );

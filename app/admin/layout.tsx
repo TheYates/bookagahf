@@ -42,17 +42,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex min-h-svh bg-muted/20">
-      {/* ── Sidebar ── */}
+    <div className="h-screen bg-muted/20">
+      {/* ── Sidebar (always fixed, never scrolls with main content) ── */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-background transition-transform duration-200",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
-          "lg:static lg:translate-x-0",
+          "lg:translate-x-0",
         )}
       >
         {/* Brand */}
-        <div className="flex h-16 items-center gap-3 border-b px-4">
+        <div className="flex h-16 shrink-0 items-center gap-3 border-b px-4">
           <Image
             src="/agahflogo.svg"
             alt="AGAHF logo"
@@ -81,8 +81,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        {/* Nav (scrollable if items overflow) */}
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           {NAV.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -101,8 +101,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="border-t p-3">
+        {/* Logout (always at bottom) */}
+        <div className="shrink-0 border-t p-3">
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
@@ -121,10 +121,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
       )}
 
-      {/* ── Main content ── */}
-      <div className="flex flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex h-16 items-center gap-4 border-b bg-background px-6">
+      {/* ── Main content (scrolls independently) ── */}
+      <div className="flex h-full flex-col lg:pl-64">
+        {/* Top bar (stays at top) */}
+        <header className="flex h-16 shrink-0 items-center gap-4 border-b bg-background px-6">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden"
@@ -136,7 +136,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </span>
         </header>
 
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   )

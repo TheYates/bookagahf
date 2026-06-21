@@ -71,11 +71,44 @@ export async function POST(request: NextRequest) {
     await adminClient.from("otp_tokens").delete().eq("profile_id", profile.id)
   }
 
-  // Get the internal auth email from the auth user (not the contact email in profiles)
+  // Get the profile's full_name for lazy auth user creation
+  const { data: fullProfile } = await adminClient
+    .from("profiles")
+    .select("full_name")
+    .eq("id", profile.id)
+    .single()
+
+  // Client profiles are imported without auth users.
+  // Lazily create an auth user on first login so Supabase sessions work.
   const { data: authUser } = await adminClient.auth.admin.getUserById(
     profile.id,
   )
-  const authEmail = authUser?.user?.email ?? profile.email
+
+  let authEmail: string
+  if (!authUser?.user) {
+    const uniqueEmail = `${crypto.randomUUID()}@client.medbook.internal`
+    const { data: newUser, error: createError } =
+      await adminClient.auth.admin.createUser({
+        id: profile.id,
+        email: uniqueEmail,
+        email_confirm: true,
+        user_metadata: {
+          role: profile.role,
+          full_name: fullProfile?.full_name ?? "",
+        },
+        app_metadata: { role: profile.role },
+      })
+    if (createError || !newUser?.user) {
+      console.error("[OTP verify] Failed to create auth user:", createError)
+      return NextResponse.json(
+        { error: "Failed to create session" },
+        { status: 500 },
+      )
+    }
+    authEmail = uniqueEmail
+  } else {
+    authEmail = authUser.user.email ?? profile.email
+  }
 
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({

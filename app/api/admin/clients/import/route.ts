@@ -1,114 +1,196 @@
-import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
 const adminClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  supabaseUrl,
+  serviceRoleKey,
   { auth: { autoRefreshToken: false, persistSession: false } },
 )
+
+const enc = (data: unknown) =>
+  new TextEncoder().encode(JSON.stringify(data) + "\n")
+
+const toTitleCase = (s: string) =>
+  s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
 
 /**
  * POST /api/admin/clients/import
  * Body: { clients: Array of client objects parsed from CSV }
- * 
- * Expected CSV columns (case-insensitive):
+ *
+ * Returns a streaming NDJSON response so the client can show live progress.
+ * Each line is an event: { type:"created"|"skipped"|"failed", name, error? }
+ * The final event is:    { type:"done", tally: { created, skipped, failed } }
+ *
+ * Expected columns (case-insensitive):
  * full_name, phone, x_number, company_number, email, address, category,
- * emergency_contact_name, emergency_contact_phone
+ * emergency_contact_name, emergency_contact_phone, sex, date_of_birth
+ *
+ * NOTE: Client profiles are created WITHOUT an auth user. Auth users are
+ * created lazily on first login via the OTP verify flow.
  */
 export async function POST(request: Request) {
-  const { clients } = await request.json()
+  const { clients, batchSize: rawBatchSize } = await request.json()
 
   if (!Array.isArray(clients) || clients.length === 0) {
-    return NextResponse.json({ error: "No clients provided" }, { status: 400 })
+    return new Response(enc({ type: "error", message: "No clients provided" }), {
+      status: 400,
+      headers: { "Content-Type": "application/x-ndjson" },
+    })
   }
 
-  const results: { name: string; status: string; error?: string }[] = []
+  const stream = new ReadableStream({
+    async start(controller) {
+      // ── 1. Validate and normalise all rows ───────────────────────────────────
+      const parsed: Record<string, any>[] = []
+      let created = 0, skipped = 0, failed = 0
 
-  for (const client of clients) {
-    const full_name = client.full_name?.trim()
-    const phone = client.phone?.trim()
-    const x_number = client.x_number?.trim() || null
-    const company_number = client.company_number?.trim() || null
-    const email = client.email?.trim() || null
-    const address = client.address?.trim() || null
-    const category = company_number
-      ? "private_sponsored"
-      : (client.category?.trim() || "private_cash")
-    const emergency_contact_name = client.emergency_contact_name?.trim() || null
-    const emergency_contact_phone = client.emergency_contact_phone?.trim() || null
+      for (const client of clients) {
+        const phone = client.phone?.trim()
+        const full_name = toTitleCase(client.full_name?.trim() ?? "")
+        const x_number = client.x_number?.trim() || null
+        const company_number = client.company_number?.trim() || null
+        const email = client.email?.trim() || null
+        const address = client.address?.trim() || null
+        const category = company_number
+          ? "private_sponsored"
+          : (client.category?.trim() || "private_cash")
+        const emergency_contact_name =
+          client.emergency_contact_name?.trim() || null
+        const emergency_contact_phone =
+          client.emergency_contact_phone?.trim() || null
+        const sex = client.sex?.trim() || null
+        const date_of_birth = client.date_of_birth?.trim() || null
+        const date_joined = client.date_joined?.trim() || null
 
-    if (!full_name || !phone) {
-      results.push({ name: full_name ?? "(unknown)", status: "failed", error: "Full name and phone required" })
-      continue
-    }
+        if (!full_name) {
+          failed++
+          controller.enqueue(enc({ type: "failed", name: "(unknown)", error: "Full name is required" }))
+          continue
+        }
 
-    if (!x_number && !company_number) {
-      results.push({ name: full_name, status: "failed", error: "X-number or company number required" })
-      continue
-    }
+        if (full_name.toLowerCase() === "walk-in patient") {
+          failed++
+          controller.enqueue(enc({ type: "failed", name: full_name, error: "Auto-rejected: walk-in patient" }))
+          continue
+        }
 
-    try {
-      // Check if already exists
-      const { data: existing } = await adminClient
-        .from("profiles")
-        .select("id")
-        .or(x_number ? `x_number.eq.${x_number}` : `company_number.eq.${company_number}`)
-        .single()
+        if (!x_number && !company_number) {
+          failed++
+          controller.enqueue(enc({ type: "failed", name: full_name, error: "X-number or company number required" }))
+          continue
+        }
 
-      if (existing) {
-        results.push({ name: full_name, status: "skipped (already exists)" })
-        continue
+        parsed.push({
+          full_name,
+          email: null,
+          phone,
+          x_number,
+          company_number,
+          address,
+          category,
+          emergency_contact_name,
+          emergency_contact_phone,
+          sex,
+          date_of_birth,
+          date_joined,
+          is_active: true,
+        })
       }
 
-      const slug = x_number
-        ? x_number.replace("/", "-").toLowerCase()
-        : `corp-${company_number}`
-      const authEmail = `${slug}@client.medbook.internal`
+      // ── 2. Bulk existence check ──────────────────────────────────────────────
+      const xNumbers = [
+        ...new Set(parsed.filter((p) => p.x_number).map((p) => p.x_number)),
+      ]
+      const companyNumbers = [
+        ...new Set(
+          parsed.filter((p) => p.company_number).map((p) => p.company_number),
+        ),
+      ]
 
-      const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
-        email: authEmail,
-        email_confirm: true,
-        user_metadata: { role: "client", full_name },
-        app_metadata: { role: "client" },
-      })
+      const existingX = new Set<string>()
+      const existingCompany = new Set<string>()
 
-      if (authError || !authUser.user) {
-        results.push({ name: full_name, status: "failed", error: authError?.message })
-        continue
+      if (xNumbers.length > 0) {
+        const { data } = await adminClient
+          .from("profiles")
+          .select("x_number")
+          .in("x_number", xNumbers)
+        if (data) for (const r of data) existingX.add(r.x_number)
       }
 
-      const { error: profileError } = await adminClient.from("profiles").insert({
-        id: authUser.user.id,
-        role: "client",
-        full_name,
-        email: email ?? authEmail,
-        phone,
-        x_number,
-        company_number,
-        address,
-        category,
-        emergency_contact_name,
-        emergency_contact_phone,
-        is_active: true,
-      })
-
-      if (profileError) {
-        results.push({ name: full_name, status: "failed", error: profileError.message })
-        continue
+      if (companyNumbers.length > 0) {
+        const { data } = await adminClient
+          .from("profiles")
+          .select("company_number")
+          .in("company_number", companyNumbers)
+        if (data) for (const r of data) existingCompany.add(r.company_number)
       }
 
-      results.push({ name: full_name, status: "created" })
-    } catch (err: any) {
-      results.push({ name: full_name, status: "failed", error: err?.message })
-    }
-  }
+      const toInsert: Record<string, any>[] = []
+      const seenXInFile = new Set<string>()
+      const seenCompanyInFile = new Set<string>()
 
-  const created = results.filter((r) => r.status === "created").length
-  const skipped = results.filter((r) => r.status.startsWith("skipped")).length
-  const failed = results.filter((r) => r.status === "failed").length
+      for (const p of parsed) {
+        // Skip duplicates found in the database
+        if (
+          (p.x_number && existingX.has(p.x_number)) ||
+          (p.company_number && existingCompany.has(p.company_number))
+        ) {
+          skipped++
+          controller.enqueue(enc({ type: "skipped", name: p.full_name, reason: "already exists in system" }))
+          continue
+        }
 
-  return NextResponse.json({
-    message: `Import complete. Created: ${created}, Skipped: ${skipped}, Failed: ${failed}`,
-    results,
+        // Skip duplicates found elsewhere in the same file
+        if (
+          (p.x_number && seenXInFile.has(p.x_number)) ||
+          (p.company_number && seenCompanyInFile.has(p.company_number))
+        ) {
+          skipped++
+          controller.enqueue(enc({ type: "skipped", name: p.full_name, reason: "duplicate in file" }))
+          continue
+        }
+
+        toInsert.push(p)
+        if (p.x_number) seenXInFile.add(p.x_number)
+        if (p.company_number) seenCompanyInFile.add(p.company_number)
+      }
+
+      // ── 3. Batch insert ──────────────────────────────────────────────────────
+      const BATCH_SIZE = Math.min(1000, Math.max(1, Number(rawBatchSize) || 200))
+
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE)
+        const rows = batch.map((p) => ({
+          id: crypto.randomUUID(),
+          role: "client",
+          ...p,
+        }))
+
+        const { error } = await adminClient.from("profiles").insert(rows)
+
+        if (error) {
+          failed += batch.length
+          for (const p of batch) {
+            controller.enqueue(enc({ type: "failed", name: p.full_name, error: error.message }))
+          }
+        } else {
+          created += batch.length
+          for (const p of batch) {
+            controller.enqueue(enc({ type: "created", name: p.full_name }))
+          }
+        }
+      }
+
+      // ── 4. Done ──────────────────────────────────────────────────────────────
+      controller.enqueue(enc({ type: "done", tally: { created, skipped, failed, total: clients.length } }))
+      controller.close()
+    },
+  })
+
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson" },
   })
 }

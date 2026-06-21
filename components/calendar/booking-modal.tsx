@@ -8,6 +8,8 @@ import {
   User,
   Stethoscope,
   X,
+  Check,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,7 +27,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 interface Department {
   id: number
@@ -35,6 +51,120 @@ interface Department {
   working_days: string[]
   working_hours: { start: string; end: string }
   is_active: boolean
+}
+
+type PatientMatch = {
+  id: string
+  full_name: string
+  x_number: string | null
+  phone: string | null
+}
+
+function PatientSearchCombobox({
+  value,
+  onSelect,
+}: {
+  value: string
+  onSelect: (patient: PatientMatch) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState("")
+  const [results, setResults] = React.useState<PatientMatch[]>([])
+  const [searching, setSearching] = React.useState(false)
+
+  React.useEffect(() => {
+    if (query.length < 2) {
+      setResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(`/api/clients/search?q=${encodeURIComponent(query)}`)
+        const d = await res.json()
+        setResults(d.clients ?? [])
+      } catch {
+        setResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Input
+          id="clientName"
+          value={value || query}
+          onChange={(e) => {
+            const v = e.target.value
+            setQuery(v)
+            if (!v) setOpen(false)
+            if (v.length >= 2) setOpen(true)
+          }}
+          placeholder="Type patient name or search…"
+          required
+          autoComplete="off"
+        />
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+        sideOffset={4}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={query}
+            onValueChange={(v) => {
+              setQuery(v)
+              if (v.length >= 2) setOpen(true)
+            }}
+            placeholder="Search patients…"
+            className="h-9"
+          />
+          <CommandList>
+            {searching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!searching && results.length === 0 && query.length >= 2 && (
+              <CommandEmpty>No matching patients found.</CommandEmpty>
+            )}
+            <CommandGroup>
+              {results.map((patient) => (
+                <CommandItem
+                  key={patient.id}
+                  value={`${patient.full_name} ${patient.x_number ?? ""}`}
+                  onSelect={() => {
+                    onSelect(patient)
+                    setQuery("")
+                    setResults([])
+                    setOpen(false)
+                  }}
+                >
+                  <div className="flex flex-1 flex-col gap-0.5">
+                    <span className="text-sm font-medium">
+                      {patient.full_name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {[patient.x_number, patient.phone]
+                        .filter(Boolean)
+                        .join(" · ") || "No contact info"}
+                    </span>
+                  </div>
+                  <Check className="ml-auto h-4 w-4 shrink-0 opacity-0 data-[checked]:opacity-100" />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 interface BookingModalProps {
@@ -75,9 +205,13 @@ export function BookingModal({
   const fetchDepartments = async () => {
     try {
       const response = await fetch("/api/departments")
-      const data = await response.json()
-      if (data.success || data.departments) {
-        setDepartments(data.departments || data)
+      const json = await response.json()
+      if (json.success && Array.isArray(json.data)) {
+        setDepartments(json.data)
+      } else if (Array.isArray(json.departments)) {
+        setDepartments(json.departments)
+      } else if (Array.isArray(json)) {
+        setDepartments(json)
       }
     } catch (error) {
       console.error("Error fetching departments:", error)
@@ -166,14 +300,16 @@ export function BookingModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="clientName">Patient Name *</Label>
-            <Input
-              id="clientName"
+            <PatientSearchCombobox
               value={formData.clientName}
-              onChange={(e) =>
-                setFormData({ ...formData, clientName: e.target.value })
+              onSelect={(patient) =>
+                setFormData({
+                  ...formData,
+                  clientName: patient.full_name,
+                  clientXNumber: patient.x_number ?? formData.clientXNumber,
+                  contactPhone: patient.phone ?? formData.contactPhone,
+                })
               }
-              placeholder="Enter patient name"
-              required
             />
           </div>
 
